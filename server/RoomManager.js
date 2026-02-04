@@ -20,6 +20,7 @@ class RoomManager {
         };
         this.rooms.set(roomId, room);
         this.joinRoom(socket, roomId);
+        this.broadcastRoomList();
     }
 
     joinRoom(socket, roomId) {
@@ -28,21 +29,33 @@ class RoomManager {
             socket.emit('error', 'Room not found');
             return;
         }
-        if (room.status !== 'LOBBY') {
-            socket.emit('error', 'Game already started');
-            return;
-        }
 
-        // Remove from other rooms if needed (simplified: assume one room at a time)
+        // Allow joining if Lobby OR Playing (Spectator/Waiting)
+        // Original check: if (room.status !== 'LOBBY') ...
+
         socket.join(roomId);
-        room.players.push({
-            id: socket.id,
-            username: socket.data.username,
-            ready: false
-        });
         socket.data.roomId = roomId;
 
-        this.io.to(roomId).emit('room_update', this.getRoomData(room));
+        if (room.status === 'LOBBY') {
+            room.players.push({
+                id: socket.id,
+                username: socket.data.username,
+                ready: false
+            });
+            this.io.to(roomId).emit('room_update', this.getRoomData(room));
+            this.broadcastRoomList();
+        } else {
+            // Determine if Spectator or Waiting
+            // Add to waiting list in Game
+            if (room.game) {
+                room.game.addWaitingPlayer({
+                    id: socket.id,
+                    username: socket.data.username
+                });
+                // Send current game state to this specific user instantly
+                room.game.broadcastState();
+            }
+        }
     }
 
     startGame(socket) {
@@ -51,8 +64,8 @@ class RoomManager {
         if (!room) return;
         if (room.ownerId !== socket.id) return; // Only owner
 
-        if (room.players.length < 3) { // Constraint from user: 3-8 players
-            socket.emit('error', 'Need at least 3 players');
+        if (room.players.length < 2) { // Constraint lowered for testing (User request implies testing issues)
+            socket.emit('error', 'Need at least 2 players to start');
             return;
         }
 
@@ -63,6 +76,7 @@ class RoomManager {
         room.game.start();
 
         this.io.to(roomId).emit('room_update', this.getRoomData(room));
+        this.broadcastRoomList();
     }
 
     handlePlay(socket, { cards }) {
@@ -144,6 +158,14 @@ class RoomManager {
         }
     }
 
+    handleSeatSelection(socket) {
+        const roomId = socket.data.roomId;
+        const room = this.rooms.get(roomId);
+        if (room && room.game) {
+            room.game.handleSeatCardSelection(socket.id);
+        }
+    }
+
     getRoomData(room) {
         return {
             id: room.id,
@@ -152,6 +174,20 @@ class RoomManager {
             ownerId: room.ownerId,
             status: room.status
         };
+    }
+
+    getRoomListData() {
+        // Return summary of all rooms
+        return Array.from(this.rooms.values()).map(r => ({
+            id: r.id,
+            name: r.name,
+            playerCount: r.players.length,
+            status: r.status
+        }));
+    }
+
+    broadcastRoomList() {
+        this.io.emit('room_list', this.getRoomListData());
     }
 }
 

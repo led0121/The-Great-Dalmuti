@@ -39,6 +39,12 @@ io.on('connection', (socket) => {
     socket.on('taxation_return', (cardIds) => roomManager.handleTaxationReturn(socket, cardIds));
     socket.on('market_trade', (cardId) => roomManager.handleMarketTrade(socket, cardId));
     socket.on('market_pass', () => roomManager.handleMarketPass(socket));
+    socket.on('select_seat_card', () => roomManager.handleSeatSelection(socket));
+
+    // Room List Request (e.g. on new connection or refresh)
+    socket.on('request_room_list', () => {
+        socket.emit('room_list', roomManager.getRoomListData());
+    });
 
     socket.on('disconnect', () => {
         roomManager.handleDisconnect(socket);

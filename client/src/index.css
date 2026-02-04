@@ -7,3 +7,10 @@ body {
     color: #ffffff;
     font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
 }
+
+.bg-card-pattern {
+  background-color: #1e3a8a;
+  background-image: repeating-linear-gradient(45deg, #172554 25%, transparent 25%, transparent 75%, #172554 75%, #172554), repeating-linear-gradient(45deg, #172554 25%, #1e3a8a 25%, #1e3a8a 75%, #172554 75%, #172554);
+  background-position: 0 0, 10px 10px;
+  background-size: 20px 20px;
+}

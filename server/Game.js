@@ -7,6 +7,14 @@ class Game {
             marketDuration: 60 // Default market time
         }, options);
 
+        // Ensure players have hand initialized
+        this.players.forEach(p => {
+            if (!p.hand) p.hand = [];
+            if (p.rank === undefined) p.rank = 0; // Or some default
+            p.finished = false; // Reset finished state
+        });
+
+        this.deck = [];
         this.deck = [];
         this.currentTurnIndex = 0;
         this.lastMove = null; // { playerId, cards: [] }
@@ -18,8 +26,11 @@ class Game {
         this.timeLeft = 0;
         this.revolutionActive = false;
 
-        // Phases: 'TAXATION', 'MARKET', 'PLAYING', 'FINISHED'
+        // Phases: 'TAXATION', 'MARKET', 'PLAYING', 'FINISHED', 'SEAT_SELECTION'
         this.phase = 'PLAYING';
+
+        // Waiting Room (Spectators)
+        this.waitingPlayers = []; // Players who joined late
 
         // Market
         this.marketPool = []; // { playerId, card }
@@ -27,22 +38,213 @@ class Game {
     }
 
     start() {
-        // First Game: No ranks, clean start.
-        this.phase = 'PLAYING';
+        // First Game Check: If Round 1
+        this.phase = 'SEAT_SELECTION';
+        this.startSeatSelection();
+    }
+
+    startSeatSelection() {
+        this.phase = 'SEAT_SELECTION';
+        this.seatDeck = [];
+        this.selectedSeats = []; // { playerId, rank, card }
+
+        // Generate distinct ranks for seat selection
+        // Cards 1..Players.length, or just random unique cards?
+        // Dalmuti style: Draw 1 card. Lowest rank acts as Dalmuti.
+        // We need Deck
         this.initDeck();
+        this.shuffleDeck(); // Full deck shuffled
+
+        // We will deal 1 card per player as 'Seat Candidates'
+        // Actually, normally players draw from spread deck.
+        // We simulate this by offering N cards (where N = Players).
+        // To ensure unique ranks for simplicity (to avoid re-draw ties):
+        // We can force deck to be 1..N unique ranks for this phase? 
+        // Or just draw from full deck?
+        // Real rule: Draw from deck. If tie, re-draw.
+        // Simplified: Pick from a subset of UNIQUE ranks to guarantee strict ordering immediately.
+        // Let's create a special deck of 1..N distinct ranks for speed?
+        // User requested: "Show back of cards.. select.. lowest number = 1st".
+        // Let's us full deck but handle ties? Or simplified unique deck?
+        // "Unique Ranks" is much better for UX (no tie breaker rounds).
+        // Strategy: Create deck of cards with Rank 1 to N (one each).
+        this.seatDeck = [];
+        // Ensure strictly different ranks if possible? 
+        // If 8 players, ranks 1..8. 
+        for (let i = 1; i <= this.players.length; i++) {
+            this.seatDeck.push({ rank: i, isJoker: false, id: `seat-${i}` });
+        }
+        // Shuffle this small deck
+        for (let i = this.seatDeck.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [this.seatDeck[i], this.seatDeck[j]] = [this.seatDeck[j], this.seatDeck[i]];
+        }
+
+        this.broadcastState();
+    }
+
+    startPartialSeatSelection() {
+        this.phase = 'SEAT_SELECTION'; // Reuse UI but logic differs
+        this.seatDeck = [];
+        this.selectedSeats = [];
+
+        // Participants: Current Last Place (Great Peon) + New Players
+        // 1. Identify Great Peon
+        // Note: this.players is currently sorted by rank? No, random order but have 'rank' prop.
+        const sortedPlayers = [...this.players].sort((a, b) => a.rank - b.rank);
+        const greatPeon = sortedPlayers[sortedPlayers.length - 1]; // Only the absolute last place is contested
+
+        // 2. Combine for contest
+        // We move Great Peon to "Contestants" temporary list?
+        // Or just keep track of who is picking.
+        this.contestants = [greatPeon, ...this.waitingPlayers];
+
+        // 3. Create Seat Deck for them (Rank 1..N where N = contestants.length)
+        // These are "Relative Ranks" for the bottom slots.
+        for (let i = 1; i <= this.contestants.length; i++) {
+            this.seatDeck.push({ rank: i, isJoker: false, id: `seat-${i}` });
+        }
+        // Shuffle
+        for (let i = this.seatDeck.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [this.seatDeck[i], this.seatDeck[j]] = [this.seatDeck[j], this.seatDeck[i]];
+        }
+
+        this.broadcastState();
+    }
+
+    handleSeatCardSelection(playerId) {
+        if (this.phase !== 'SEAT_SELECTION') return;
+
+        // Check if player is a contestant. If purely initial game, all are contestants.
+        // If partial, only contestants can pick.
+        const isContestant = !this.contestants || this.contestants.find(p => p.id === playerId);
+        if (!isContestant) return;
+
+        if (this.selectedSeats.find(s => s.playerId === playerId)) return;
+
+        if (this.seatDeck.length === 0) return;
+
+        const card = this.seatDeck.pop();
+        this.selectedSeats.push({ playerId, card });
+
+        // Check completion
+        const targetCount = this.contestants ? this.contestants.length : this.players.length;
+
+        if (this.selectedSeats.length === targetCount) {
+            if (this.contestants) {
+                this.finalizePartialSeatSelection();
+            } else {
+                this.finalizeSeatSelection();
+            }
+        } else {
+            this.broadcastState();
+        }
+    }
+
+    finalizePartialSeatSelection() {
+        this.selectedSeats.sort((a, b) => a.card.rank - b.card.rank); // 1 = Best of the worst, N = Worst
+
+        // Current Established Ranks: 1 .. (Players - 1)
+        // The Great Peon was Rank N.
+        // New Ranks will be:
+        // Existing Players (excluding Old Peon) keep their ranks.
+        // The slots from N to (N + Waiting - 1) are filled by the contest results.
+
+        // 1. Remove Old Peon from active list temporarily to sort easily?
+        // OR just reconstruct the player list.
+
+        // Existing "Upper Class" (everyone except old peon)
+        // Note: this.players contains Old Peon.
+        const oldPeon = this.contestants.find(c => this.players.find(p => p.id === c.id));
+        const upperClass = this.players.filter(p => p.id !== oldPeon.id);
+
+        // 2. New Order
+        // Contestants sorted by their draw.
+        // Best Draw (Rank 1) -> Takes the best available spot (which is old Peon's spot: Rank "UpperCount + 1")
+        // Next Draw -> Rank "UpperCount + 2", etc.
+
+        const startRank = upperClass.length + 1;
+
+        this.selectedSeats.forEach((seat, index) => {
+            const contestPlayer = this.contestants.find(p => p.id === seat.playerId);
+            if (contestPlayer) {
+                contestPlayer.rank = startRank + index;
+            }
+        });
+
+        // 3. Merge Lists
+        // If the winner was the Old Peon, they stay. If it was a new player, they enter.
+        // We need to move new players from waitingPlayers to this.players
+        this.waitingPlayers.forEach(wp => {
+            // Updated rank is already set in step 2 (wp is ref in contestants)
+            this.players.push(wp);
+        });
+        this.waitingPlayers = [];
+        this.contestants = null; // Clear
+
+        // 4. Sort all players by rank
+        this.players.sort((a, b) => a.rank - b.rank);
+
+        this.activePlayersCount = this.players.length;
+
+        this.broadcastState();
+
+        setTimeout(() => {
+            // Proceed to Round logic (Taxation)
+            // But we need to call startNextRound again, bypassing the check?
+            // Or extract "Init Round" logic.
+            // Let's call startNextRound recursively, it will see waitingPlayers is empty and proceed.
+            this.startNextRound();
+        }, 5000);
+    }
+
+    // Original methods...
+    finalizeSeatSelection() {
+        // Sort by rank (Lower = Better)
+        // Assign Game Ranks
+        this.selectedSeats.sort((a, b) => a.card.rank - b.card.rank);
+
+        this.selectedSeats.forEach((seat, index) => {
+            const player = this.players.find(p => p.id === seat.playerId);
+            if (player) {
+                player.rank = index + 1; // 1 = Dalmuti
+            }
+        });
+
+        // Wait a moment for users to see results?
+        // We'll set a brief timeout or let frontend handle "Revealed" state then transition?
+        // Let's broadcast "Assignments" and then 'PLAYING' after delay?
+        this.broadcastState();
+
+        setTimeout(() => {
+            this.startFirstRound();
+        }, 5000); // 5 seconds to see who is who
+    }
+
+    startFirstRound() {
+        this.phase = 'PLAYING';
+        this.initDeck(); // Real deck
         this.shuffleDeck();
         this.dealCards();
-        this.setupHands(); // Sort and init
+        this.setupHands();
 
-        // Random start for Round 1
-        this.currentTurnIndex = Math.floor(Math.random() * this.players.length);
+        // Start turn: Rank 1 starts
+        this.currentTurnIndex = this.players.findIndex(p => p.rank === 1);
+        if (this.currentTurnIndex === -1) this.currentTurnIndex = 0;
 
-        this.checkAndHandleRevolution();
+        this.checkAndHandleRevolution(); // Round 1 Revolution check?
         this.startTurnTimer();
         this.broadcastState();
     }
 
     startNextRound() {
+        // Check for Waiting Players first
+        if (this.waitingPlayers.length > 0) {
+            this.startPartialSeatSelection();
+            return;
+        }
+
         this.round++;
         this.phase = 'TAXATION';
         this.initDeck();
@@ -57,29 +259,120 @@ class Game {
         this.marketPool = [];
         this.marketPasses.clear();
 
+        // sort players by rank to ensure references are correct
+        this.players.sort((a, b) => a.rank - b.rank);
+
         // Revolution Check
         this.checkAndHandleRevolution();
 
-        // If Revolution occurred, user might want to skip Taxation? 
-        // Standard rule: Revolution = No taxation.
-        // User request didn't specify, but I'll assume if Revolution happened (swap), 
-        // the roles are swapped, and we proceed to Taxation with new roles?
-        // Actually Dalmuti rules usually say "No taxation if revolution". 
-        // Let's implement: If Revolution -> Skip Taxation, Go to Market. (Or Play).
-        // User's rule 2: "After exchange... market".
-        // I will implement: If Revolution -> Skip Taxation, Go to Market. 
-        // If Revolution happened, checks are based on NEW ranks.
-
         if (this.revolutionActive) {
-            // If revolution, usually taxation is skipped.
-            // I'll skip to Market for fairness/simplicity if Rev occurred.
             this.startMarketPhase();
         } else {
-            // Auto-Tax: Peon (Last) gives 2 Best to Dalmuti (1)
-            this.handleAutoTaxation();
+            // Initiate Taxation
+            // Rank 1 (Great Dalmuti) <-> Rank Last (Great Peon) : 2 Cards
+            // Rank 2 (Lesser Dalmuti) <-> Rank Last-1 (Lesser Peon) : 1 Card
+            // If < 4 players, only Great roles exist? 
+            // Rules:
+            // >3 players: Great exchange (2) AND Lesser exchange (1)
+            // =3 players: Great exchange (2). Rank 2 is Merchant (safe).
+            // <=2? Great exchange (2) (Technically 2 player dalmuti is boring but possible)
+
+            this.initTaxation();
         }
 
         this.broadcastState();
+    }
+
+    initTaxation() {
+        // 1. Great Peon (Last) gives 2 best cards to Great Dalmuti (Rank 1)
+        const dalmuti = this.players.find(p => p.rank === 1);
+        const peon = this.players.find(p => p.rank === this.players.length);
+
+        if (dalmuti && peon) {
+            this.executeForcedTax(peon, dalmuti, 2);
+        }
+
+        // 2. Lesser Peon gives 1 best card to Lesser Dalmuti (If 4+ players)
+        if (this.players.length >= 4) {
+            const lesserDalmuti = this.players.find(p => p.rank === 2);
+            const lesserPeon = this.players.find(p => p.rank === this.players.length - 1);
+            if (lesserDalmuti && lesserPeon) {
+                this.executeForcedTax(lesserPeon, lesserDalmuti, 1);
+            }
+        }
+    }
+
+    executeForcedTax(giver, receiver, count) {
+        // Giver (Peon) must give lowest Rank cards (Best cards)
+        // Hand is sorted. So take first 'count' cards.
+        // Jokers (13) are usually considered best, but numerically high over 12. 
+        // Dalmuti Rules often say "Best Cards" are Jokers if held, otherwise Lowest Rank.
+        // My check logic 'getPrimaryRank' says Joker is 13.
+        // But in gameplay Joker is wild.
+        // Let's assume standard rule: "Lowest Number". (Jokers kept? Or given?)
+        // Wikipedia: "The Peon must give their highest cards..." wait.
+        // "Great Peon gives 2 best cards to Great Dalmuti."
+        // "Best" = usually Jokers > 1 > 2...
+        // If strict numeric: 1 is best. 13 (Joker) is wild.
+        // Let's prioritize Jokers as BEST, then 1, 2...
+
+        // Custom sort for "Value": Joker (13) > 1 > 2 ...
+        // Actually, let's keep it simple: Giver gives Lowest Ranks (1, 2..). 
+        // If Joker is 13, it will be kept (worst). This is a disadvantage for Peon if Joker is good.
+        // But usually Peon gives matching set if possible? No.
+
+        // Impl: Give first 'count' cards from sorted hand.
+        // If we want key cards (Jokers) to be given, we need to treat them as Rank 0 effectively.
+        // Let's stick to numeric rank 1..12 first.
+
+        const taxes = giver.hand.slice(0, count);
+        giver.hand = giver.hand.slice(count);
+        receiver.hand.push(...taxes);
+        receiver.hand.sort((a, b) => a.rank - b.rank);
+
+        // Track that receiver needs to return 'count' cards
+        if (!receiver.taxDebt) receiver.taxDebt = 0;
+        receiver.taxDebt += count;
+    }
+
+    handleTaxationReturn(playerId, cardIds) {
+        if (this.phase !== 'TAXATION') return;
+        const player = this.players.find(p => p.id === playerId);
+        if (!player || !player.taxDebt) return;
+
+        if (cardIds.length !== player.taxDebt) return; // Must pay full debt at once? Or partial?
+        // Let's enforce full return for simplicity
+
+        // Verify
+        const cardsToReturn = player.hand.filter(c => cardIds.includes(c.id));
+        if (cardsToReturn.length !== player.taxDebt) return;
+
+        // Determine Receiver (Who gave me cards? Rank Last or Rank Last-1)
+        // If Rank 1, I owe Peon (Last).
+        // If Rank 2, I owe Lesser Peon (Last-1).
+        let targetRank = -1;
+        if (player.rank === 1) targetRank = this.players.length;
+        if (player.rank === 2) targetRank = this.players.length - 1;
+
+        const receiver = this.players.find(p => p.rank === targetRank);
+        if (!receiver) return; // Should not happen
+
+        // Transfer
+        player.hand = player.hand.filter(c => !cardIds.includes(c.id));
+        receiver.hand.push(...cardsToReturn);
+
+        player.hand.sort((a, b) => a.rank - b.rank);
+        receiver.hand.sort((a, b) => a.rank - b.rank);
+
+        player.taxDebt = 0; // Debt paid
+
+        // Check if all debts paid
+        const anyoneOwes = this.players.some(p => p.taxDebt > 0);
+        if (!anyoneOwes) {
+            this.startMarketPhase();
+        } else {
+            this.broadcastState();
+        }
     }
 
     setupHands() {
@@ -463,6 +756,19 @@ class Game {
         return -1; // Invalid
     }
 
+    addWaitingPlayer(player) {
+        // Add to waiting list. 
+        // We set their initial properties.
+        this.waitingPlayers.push({
+            ...player,
+            hand: [],
+            rank: 99, // Temp rank
+            finished: false,
+            connected: true
+        });
+        this.broadcastState(); // They will see "Waiting" status
+    }
+
     broadcastState() {
         // Mask hands of other players
         const publicState = {
@@ -477,14 +783,21 @@ class Game {
             players: this.players.map(p => ({
                 id: p.id,
                 username: p.username,
-                cardCount: p.hand.length,
+                cardCount: p.hand ? p.hand.length : 0,
                 finished: p.finished,
                 connected: p.connected, // Frontend can show offline status
                 rank: p.rank,
+                taxDebt: p.taxDebt,
                 hand: p.hand,
                 // Add market status?
                 marketPassed: this.marketPasses.has(p.id)
-            }))
+            })),
+            waitingPlayers: this.waitingPlayers.map(p => ({
+                id: p.id,
+                username: p.username
+            })),
+            selectedSeats: this.selectedSeats,
+            seatDeckCount: this.seatDeck ? this.seatDeck.length : 0
         };
         this.onUpdate(publicState);
     }

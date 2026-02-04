@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
+import { useLanguage } from '../App'
 
 export default function Chat({ socket, username, room }) {
     const [messages, setMessages] = useState([])
     const [inputValue, setInputValue] = useState('')
     const messagesEndRef = useRef(null)
+    const { t } = useLanguage()
+
     useEffect(() => {
         socket.on('chat_message', (msg) => {
             setMessages(prev => [...prev, msg])
@@ -37,7 +40,7 @@ export default function Chat({ socket, username, room }) {
         >
             {/* Header - Drag Handle */}
             <div className="p-2 border-b border-gray-600 bg-gray-900/50 rounded-t-lg cursor-move active:cursor-grabbing">
-                <h3 className="text-sm font-bold text-gray-300 pointer-events-none">Room Chat ✥</h3>
+                <h3 className="text-sm font-bold text-gray-300 pointer-events-none">{t('chatTitle')}</h3>
             </div>
 
             <div className="flex-1 overflow-y-auto p-2 space-y-2 text-sm">
@@ -58,10 +61,10 @@ export default function Chat({ socket, username, room }) {
                     type="text"
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
-                    placeholder="Type a message..."
+                    placeholder={t('chatPlaceholder')}
                     className="flex-1 bg-gray-900 text-white text-xs px-2 py-1 rounded border border-gray-700 outline-none focus:border-blue-500"
                 />
-                <button type="submit" className="text-blue-400 hover:text-blue-300 font-bold text-xs">Send</button>
+                <button type="submit" className="text-blue-400 hover:text-blue-300 font-bold text-xs">{t('sendBtn')}</button>
             </form>
         </motion.div>
     )
