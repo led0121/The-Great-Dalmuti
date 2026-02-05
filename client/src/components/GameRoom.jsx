@@ -34,6 +34,10 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
 
     // --- Strict Play Validation ---
     const isCardPlayable = (card) => {
+        // Allow interaction during Taxation and Market
+        if (gameState.phase === 'TAXATION') return myPlayer?.taxDebt > 0;
+        if (gameState.phase === 'MARKET') return !myPlayer?.marketPassed;
+
         if (!isMyTurn) return false;
         if (gameState.phase !== 'PLAYING') return false;
 
@@ -297,6 +301,39 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                 <Chat socket={socket} username={username} room={room} />
                 <div className="absolute top-4 left-4 z-50 mt-6"><button onClick={() => setIsRulesOpen(true)} className="w-10 h-10 rounded-full bg-gray-700 text-white font-bold border border-gray-500">?</button></div>
                 <RulesModal isOpen={isRulesOpen} onClose={() => setIsRulesOpen(false)} currentPhase={gameState.phase} />
+
+                {/* REVOLUTION CHOICE OVERLAY */}
+                {gameState.phase === 'REVOLUTION_CHOICE' && (
+                    <div className="absolute inset-0 z-40 bg-black/90 flex flex-col items-center justify-center pointer-events-auto">
+                        <h2 className="text-5xl text-red-500 font-black mb-8 animate-pulse shadow-red-500 drop-shadow-lg">{t('revolutionTitle')}</h2>
+                        <div className="bg-gray-800 p-8 rounded-2xl border-2 border-red-500 text-center max-w-lg shadow-2xl">
+                            <p className="text-2xl text-white mb-6 font-bold">{t('revolutionPrompt')}</p>
+
+                            {gameState.players.find(p => p.id === socket.id)?.id === gameState.currentTurn /* Wait, REVOLUTION_CHOICE uses revolutionCandidateId, not currentTurn. But logic in Game.js sets currentTurn? No, let's use candidate check */
+                                || (myPlayer && myPlayer.hand.filter(c => c.isJoker).length === 2) ? (
+                                <div className="flex gap-4 justify-center">
+                                    <button
+                                        onClick={() => socket.emit('revolution_choice', true)}
+                                        className="bg-red-600 hover:bg-red-700 text-white font-black text-xl py-4 px-8 rounded-xl shadow-lg hover:scale-105 transition-transform"
+                                    >
+                                        {t('revolutionYes')}
+                                    </button>
+                                    <button
+                                        onClick={() => socket.emit('revolution_choice', false)}
+                                        className="bg-gray-600 hover:bg-gray-500 text-white font-bold text-xl py-4 px-8 rounded-xl shadow-lg hover:scale-105 transition-transform"
+                                    >
+                                        {t('revolutionNo')}
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="text-gray-400 text-xl animate-pulse">
+                                    {t('revolutionWaiting')}
+                                </div>
+                            )}
+                            <p className="mt-6 text-sm text-gray-400">{t('revolutionDesc')}</p>
+                        </div>
+                    </div>
+                )}
 
                 {/* PHASE OVERLAYS */}
                 {gameState.phase === 'TAXATION' && (

@@ -26,6 +26,7 @@ export const translations = {
         // Room List Item
         statusLobby: "대기중",
         statusPlaying: "게임중",
+        spectateBtn: "관전하기",
 
         // Game Room
         roomInfo: "방: {roomId} | 유저: {username}",
@@ -75,7 +76,13 @@ export const translations = {
         // Chat
         chatTitle: "채팅방 ✥",
         chatPlaceholder: "메시지 입력...",
-        sendBtn: "전송"
+        sendBtn: "전송",
+        revolutionTitle: "혁명인가?!",
+        revolutionPrompt: "조커 2장을 사용하여 혁명을 일으키겠습니까?",
+        revolutionYes: "혁명 선포! (🔥)",
+        revolutionNo: "조용히 넘어가기",
+        revolutionDesc: "혁명을 선포하면 조커 2장을 버리고 최고 계급과 최하 계급이 뒤바뀝니다! (세금 면제)",
+        revolutionWaiting: "누군가 혁명을 고민하고 있습니다...",
     },
     en: {
         // App / Common
@@ -104,6 +111,7 @@ export const translations = {
         // Room List Item
         statusLobby: "LOBBY",
         statusPlaying: "PLAYING",
+        spectateBtn: "Spectate",
 
         // Game Room
         roomInfo: "Room: {roomId} | User: {username}",
@@ -155,6 +163,13 @@ export const translations = {
         // Chat
         chatTitle: "Room Chat ✥",
         chatPlaceholder: "Type a message...",
-        sendBtn: "Send"
+        sendBtn: "Send",
+        // Revolution
+        revolutionTitle: "REVOLUTION?!",
+        revolutionPrompt: "Do you want to use 2 Jokers to start a Revolution?",
+        revolutionYes: "DECLARE REVOLUTION! (🔥)",
+        revolutionNo: "Stay Quiet",
+        revolutionDesc: "Declaring Revolution discards 2 Jokers and swaps the highest and lowest ranks! (No Tax)",
+        revolutionWaiting: "Someone is considering a Revolution...",
     }
 }

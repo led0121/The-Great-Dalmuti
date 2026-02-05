@@ -223,18 +223,24 @@ class Game {
     }
 
     startFirstRound() {
-        this.phase = 'PLAYING';
+        this.round = 1;
         this.initDeck(); // Real deck
         this.shuffleDeck();
         this.dealCards();
         this.setupHands();
 
-        // Start turn: Rank 1 starts
-        this.currentTurnIndex = this.players.findIndex(p => p.rank === 1);
-        if (this.currentTurnIndex === -1) this.currentTurnIndex = 0;
+        // Check for Revolution Opportunity
+        this.checkRevolutionPossibility();
 
-        this.checkAndHandleRevolution(); // Round 1 Revolution check?
-        this.startTurnTimer();
+        if (this.revolutionCandidateId) {
+            this.phase = 'REVOLUTION_CHOICE';
+        } else {
+            // User requested Tax in first round too.
+            // Ranks are set from Seat Selection.
+            this.phase = 'TAXATION';
+            this.initTaxation();
+        }
+
         this.broadcastState();
     }
 
@@ -246,7 +252,6 @@ class Game {
         }
 
         this.round++;
-        this.phase = 'TAXATION';
         this.initDeck();
         this.shuffleDeck();
         this.dealCards();
@@ -262,25 +267,77 @@ class Game {
         // sort players by rank to ensure references are correct
         this.players.sort((a, b) => a.rank - b.rank);
 
-        // Revolution Check
-        this.checkAndHandleRevolution();
+        // Check for Revolution Opportunity
+        this.checkRevolutionPossibility();
 
-        if (this.revolutionActive) {
-            this.startMarketPhase();
+        if (this.revolutionCandidateId) {
+            this.phase = 'REVOLUTION_CHOICE';
         } else {
-            // Initiate Taxation
-            // Rank 1 (Great Dalmuti) <-> Rank Last (Great Peon) : 2 Cards
-            // Rank 2 (Lesser Dalmuti) <-> Rank Last-1 (Lesser Peon) : 1 Card
-            // If < 4 players, only Great roles exist? 
-            // Rules:
-            // >3 players: Great exchange (2) AND Lesser exchange (1)
-            // =3 players: Great exchange (2). Rank 2 is Merchant (safe).
-            // <=2? Great exchange (2) (Technically 2 player dalmuti is boring but possible)
-
+            this.phase = 'TAXATION';
             this.initTaxation();
         }
 
         this.broadcastState();
+    }
+
+    checkRevolutionPossibility() {
+        this.revolutionCandidateId = null;
+        this.revolutionActive = false;
+        // 2 Jokers Revolution
+        const candidate = this.players.find(p => p.hand.filter(c => c.isJoker).length === 2);
+        if (candidate) {
+            this.revolutionCandidateId = candidate.id;
+        }
+    }
+
+    handleRevolutionChoice(playerId, declare) {
+        if (this.phase !== 'REVOLUTION_CHOICE') return;
+        if (this.revolutionCandidateId !== playerId) return;
+
+        if (declare) {
+            this.revolutionActive = true;
+            this.broadcastState(); // Notify revolution!
+
+            // Logic:
+            // 1. Discard 2 Jokers (User Request)
+            const player = this.players.find(p => p.id === playerId);
+            player.hand = player.hand.filter(c => !c.isJoker);
+
+            // 2. Swap Ranks (Great Dalmuti <-> Great Peon) - Standard Rev
+            // If the revolutionary is NOT Dalmuti or Peon?
+            // "Revolution" usually inverts hierarchy.
+            // Dalmuti <-> Peon. Lesser Dalmuti <-> Lesser Peon.
+            // If I just swap Dalmuti and Peon?
+            // User request usually implies strict inversion or swap.
+            // Let's swap Rank 1 and Last Rank.
+
+            const dalmutiIndex = this.players.findIndex(p => p.rank === 1);
+            const peonIndex = this.players.findIndex(p => p.rank === this.players.length);
+
+            if (dalmutiIndex !== -1 && peonIndex !== -1) {
+                const dal = this.players[dalmutiIndex];
+                const peon = this.players[peonIndex];
+
+                // Swap Ranks
+                const tempRank = dal.rank;
+                dal.rank = peon.rank;
+                peon.rank = tempRank;
+
+                // Re-sort players list by rank
+                this.players.sort((a, b) => a.rank - b.rank);
+            }
+
+            // 3. Skip Taxation -> Market
+            this.startMarketPhase();
+
+        } else {
+            // No Revolution.
+            this.phase = 'TAXATION';
+            this.initTaxation();
+            this.broadcastState();
+        }
+
+        this.revolutionCandidateId = null;
     }
 
     initTaxation() {

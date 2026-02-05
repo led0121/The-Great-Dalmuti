@@ -52,6 +52,9 @@ class RoomManager {
                     id: socket.id,
                     username: socket.data.username
                 });
+                // Send room details to the joining user so they switch to GameRoom view
+                socket.emit('room_update', this.getRoomData(room));
+
                 // Send current game state to this specific user instantly
                 room.game.broadcastState();
             }

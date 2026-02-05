@@ -22,10 +22,12 @@ export default function Login({ onLogin }) {
                         type="text"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
+                        maxLength={16}
                         className="w-full px-4 py-2 rounded bg-gray-700 border border-gray-600 focus:border-amber-500 focus:outline-none text-white transition-colors"
                         placeholder={t('namePlaceholder')}
                         autoFocus
                     />
+                    <div className="text-right text-xs text-gray-500 mt-1">{name.length}/16</div>
                 </div>
                 <button
                     type="submit"

@@ -100,11 +100,11 @@ export default function Lobby({ username, roomList, onCreateRoom, onJoinRoom, on
                                     onClick={() => onJoinRoom(room.id)}
                                     // Allow joining even if playing (Spectator)
                                     className={`px-4 py-2 rounded font-bold transition-all ${room.status === 'LOBBY'
-                                            ? 'bg-blue-600 hover:bg-blue-500 text-white active:scale-95'
-                                            : 'bg-yellow-600 hover:bg-yellow-500 text-white active:scale-95' // Spectator join color
+                                        ? 'bg-blue-600 hover:bg-blue-500 text-white active:scale-95'
+                                        : 'bg-yellow-600 hover:bg-yellow-500 text-white active:scale-95' // Spectator join color
                                         }`}
                                 >
-                                    {room.status === 'LOBBY' ? t('joinBtn') : 'Spectate'}
+                                    {room.status === 'LOBBY' ? t('joinBtn') : t('spectateBtn')}
                                 </button>
                             </div>
                         ))

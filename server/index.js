@@ -22,8 +22,9 @@ io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
     socket.on('login', (username) => {
-        socket.data.username = username;
-        socket.emit('login_success', { id: socket.id, username });
+        const safeName = (username || 'Guest').trim().substring(0, 16);
+        socket.data.username = safeName;
+        socket.emit('login_success', { id: socket.id, username: safeName });
     });
 
     // Proxy room events to RoomManager
@@ -39,7 +40,9 @@ io.on('connection', (socket) => {
     socket.on('taxation_return', (cardIds) => roomManager.handleTaxationReturn(socket, cardIds));
     socket.on('market_trade', (cardId) => roomManager.handleMarketTrade(socket, cardId));
     socket.on('market_pass', () => roomManager.handleMarketPass(socket));
+    socket.on('market_pass', () => roomManager.handleMarketPass(socket));
     socket.on('select_seat_card', () => roomManager.handleSeatSelection(socket));
+    socket.on('revolution_choice', (declare) => roomManager.handleRevolutionChoice(socket, declare));
 
     // Room List Request (e.g. on new connection or refresh)
     socket.on('request_room_list', () => {

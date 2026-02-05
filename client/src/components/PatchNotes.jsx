@@ -2,43 +2,49 @@ import React from 'react';
 
 const PATCH_NOTES = [
     {
+        version: "v1.5.0",
+        date: "2026-02-05",
+        changes: [
+            "조커 2장으로 혁명을 선포하는 기능을 추가했습니다. (혁명 시 세금 면제)",
+            "사용자 닉네임을 최대 16글자로 제한하는 기능을 추가했습니다.",
+            "첫 번째 라운드에서도 세금 징수와 혁명이 가능하도록 게임 규칙을 수정했습니다.",
+            "혁명 선포 시 조커 2장이 즉시 버려지도록 로직을 개선했습니다."
+        ]
+    },
+    {
+        version: "v1.4.0",
+        date: "2026-02-04",
+        changes: [
+            "한국어와 영어 다국어 지원(i18n) 기능을 추가했습니다.",
+            "우측 상단에 언어 변경 버튼을 추가하여 실시간 언어 전환이 가능해졌습니다.",
+            "신분(계급)에 따라 카드를 교환하는 '세금 징수' 단계를 구현했습니다.",
+            "농노(꼴찌)가 자동으로 가장 좋은 카드를 세금으로 내도록 시스템을 구축했습니다."
+        ]
+    },
+    {
         version: "v1.3.0",
         date: "2026-02-04",
         changes: [
-            "ADDED: Spectator Mode - Watch games in progress while waiting",
-            "ADDED: Challenger Phase - New players compete with Great Peon for rank",
-            "FIXED: Game Start logic for small groups (Min 2 players)",
-            "ADDED: Room List & Patch Notes UI"
+            "게임 도중 참여하는 관전자가 다음 라운드에 합류하는 기능을 추가했습니다.",
+            "대기자와 농노가 자리를 두고 경쟁하는 '도전자 페이즈'를 구현했습니다.",
+            "관전자 모드 UI를 개선하여 현재 진행 상황을 알 수 있도록 수정했습니다."
         ]
     },
     {
         version: "v1.2.0",
-        date: "2026-02-04",
-        changes: [
-            "ADDED: Room List View - See all active rooms in lobby",
-            "ADDED: Seat Selection Phase - Draw cards to decide initial ranks",
-            "IMPROVED: Round Table UI - Players seated in a circle",
-            "IMPROVED: Strict Card Validation - Invalid cards are grayed out",
-            "FIXED: Game Start logic for small groups (Min 2 players)"
-        ]
-    },
-    {
-        version: "v1.1.0",
         date: "2026-02-03",
         changes: [
-            "ADDED: Taxation Phase - Automatic and Manual card exchange",
-            "ADDED: Market Phase - Real-time card trading",
-            "ADDED: In-Game Help (Rules Modal)",
-            "IMPROVED: Chat Window is now draggable"
+            "대기실에서 생성된 방 목록을 볼 수 있는 기능을 추가했습니다.",
+            "카드 뒷면을 클릭하여 초기 계급을 정하는 '자리 선정' 단계를 추가했습니다.",
+            "원형 테이블 형태로 좌석 배치를 시각적으로 개선했습니다."
         ]
     },
     {
         version: "v1.0.0",
         date: "2026-02-02",
         changes: [
-            "Initial Release",
-            "Basic Game Logic (Dalmuti Rules)",
-            "Lobby & Room Management"
+            "위대한 달무티 게임의 기본 로직을 구현했습니다.",
+            "방 생성, 입장, 채팅 등 멀티플레이어 기본 기능을 구축했습니다."
         ]
     }
 ];
