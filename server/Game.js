@@ -294,59 +294,67 @@ class Game {
         if (this.phase !== 'REVOLUTION_CHOICE') return;
         if (this.revolutionCandidateId !== playerId) return;
 
-        if (declare) {
-            this.revolutionActive = true;
-            this.broadcastState(); // Notify revolution!
+        try {
+            if (declare) {
+                this.revolutionActive = true;
+                this.broadcastState(); // Notify revolution!
 
-            // Logic:
-            // 1. Discard 2 Jokers (User Request)
-            const player = this.players.find(p => p.id === playerId);
-            player.hand = player.hand.filter(c => !c.isJoker);
+                // Logic:
+                // 1. Discard 2 Jokers (User Request)
+                const player = this.players.find(p => p.id === playerId);
+                if (player) {
+                    player.hand = player.hand.filter(c => !c.isJoker);
+                }
 
-            // 2. Swap Ranks (Great Dalmuti <-> Great Peon) - Standard Rev
-            // If the revolutionary is NOT Dalmuti or Peon?
-            // "Revolution" usually inverts hierarchy.
-            // Dalmuti <-> Peon. Lesser Dalmuti <-> Lesser Peon.
-            // If I just swap Dalmuti and Peon?
-            // User request usually implies strict inversion or swap.
-            // Let's swap Rank 1 and Last Rank.
+                // 2. Swap Ranks (Great Dalmuti <-> Great Peon)
+                const dalmutiIndex = this.players.findIndex(p => p.rank === 1);
+                const peonIndex = this.players.findIndex(p => p.rank === this.players.length);
 
-            const dalmutiIndex = this.players.findIndex(p => p.rank === 1);
-            const peonIndex = this.players.findIndex(p => p.rank === this.players.length);
+                if (dalmutiIndex !== -1 && peonIndex !== -1) {
+                    const dal = this.players[dalmutiIndex];
+                    const peon = this.players[peonIndex];
 
-            if (dalmutiIndex !== -1 && peonIndex !== -1) {
-                const dal = this.players[dalmutiIndex];
-                const peon = this.players[peonIndex];
+                    // Swap Ranks
+                    const tempRank = dal.rank;
+                    dal.rank = peon.rank;
+                    peon.rank = tempRank;
 
-                // Swap Ranks
-                const tempRank = dal.rank;
-                dal.rank = peon.rank;
-                peon.rank = tempRank;
+                    // Re-sort players list by rank
+                    this.players.sort((a, b) => a.rank - b.rank);
+                } else {
+                    console.error("Critical: Could not find Dalmuti or Peon for revolution swap");
+                }
 
-                // Re-sort players list by rank
-                this.players.sort((a, b) => a.rank - b.rank);
+                // 3. Skip Taxation -> Market
+                this.startMarketPhase();
+
+            } else {
+                // No Revolution.
+                this.phase = 'TAXATION';
+                this.initTaxation();
+                this.broadcastState();
             }
-
-            // 3. Skip Taxation -> Market
-            this.startMarketPhase();
-
-        } else {
-            // No Revolution.
+        } catch (error) {
+            console.error("Error in handleRevolutionChoice:", error);
+            // Fallback to Taxation to avoid stuck state
             this.phase = 'TAXATION';
             this.initTaxation();
             this.broadcastState();
         }
-
         this.revolutionCandidateId = null;
     }
 
     initTaxation() {
+        console.log("Init Taxation. Players:", this.players.map(p => `${p.username}(${p.rank})`));
         // 1. Great Peon (Last) gives 2 best cards to Great Dalmuti (Rank 1)
         const dalmuti = this.players.find(p => p.rank === 1);
         const peon = this.players.find(p => p.rank === this.players.length);
 
         if (dalmuti && peon) {
+            console.log(`Taxation: ${peon.username} (Rank ${peon.rank}) pays 2 to ${dalmuti.username}`);
             this.executeForcedTax(peon, dalmuti, 2);
+        } else {
+            console.error("Critical: Dalmuti or Peon not found during taxation init");
         }
 
         // 2. Lesser Peon gives 1 best card to Lesser Dalmuti (If 4+ players)
@@ -354,6 +362,7 @@ class Game {
             const lesserDalmuti = this.players.find(p => p.rank === 2);
             const lesserPeon = this.players.find(p => p.rank === this.players.length - 1);
             if (lesserDalmuti && lesserPeon) {
+                console.log(`Taxation: ${lesserPeon.username} pays 1 to ${lesserDalmuti.username}`);
                 this.executeForcedTax(lesserPeon, lesserDalmuti, 1);
             }
         }
@@ -361,35 +370,22 @@ class Game {
 
     executeForcedTax(giver, receiver, count) {
         // Giver (Peon) must give lowest Rank cards (Best cards)
-        // Hand is sorted. So take first 'count' cards.
-        // Jokers (13) are usually considered best, but numerically high over 12. 
-        // Dalmuti Rules often say "Best Cards" are Jokers if held, otherwise Lowest Rank.
-        // My check logic 'getPrimaryRank' says Joker is 13.
-        // But in gameplay Joker is wild.
-        // Let's assume standard rule: "Lowest Number". (Jokers kept? Or given?)
-        // Wikipedia: "The Peon must give their highest cards..." wait.
-        // "Great Peon gives 2 best cards to Great Dalmuti."
-        // "Best" = usually Jokers > 1 > 2...
-        // If strict numeric: 1 is best. 13 (Joker) is wild.
-        // Let's prioritize Jokers as BEST, then 1, 2...
-
-        // Custom sort for "Value": Joker (13) > 1 > 2 ...
-        // Actually, let's keep it simple: Giver gives Lowest Ranks (1, 2..). 
-        // If Joker is 13, it will be kept (worst). This is a disadvantage for Peon if Joker is good.
-        // But usually Peon gives matching set if possible? No.
-
-        // Impl: Give first 'count' cards from sorted hand.
-        // If we want key cards (Jokers) to be given, we need to treat them as Rank 0 effectively.
-        // Let's stick to numeric rank 1..12 first.
+        // Hand might be unsorted due to "random" feature.
+        // We must sort TEMPORARILY to identify best cards, or sort hand permanently for Giver?
+        // Giver is Peon, they lost choice. Sorting their hand is acceptable (and useful).
+        giver.hand.sort((a, b) => a.rank - b.rank);
 
         const taxes = giver.hand.slice(0, count);
         giver.hand = giver.hand.slice(count);
         receiver.hand.push(...taxes);
-        receiver.hand.sort((a, b) => a.rank - b.rank);
+
+        // Receiver (Dalmuti) hand remains Unsorted/Mixed (User Request: "receive randomly")
+        // receiver.hand.sort((a, b) => a.rank - b.rank); 
 
         // Track that receiver needs to return 'count' cards
         if (!receiver.taxDebt) receiver.taxDebt = 0;
         receiver.taxDebt += count;
+        console.log(`TaxDebt assigned: ${receiver.username} owes ${receiver.taxDebt}`);
     }
 
     handleTaxationReturn(playerId, cardIds) {

@@ -399,11 +399,21 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                                 <span className="mt-2 text-xs font-bold bg-black/50 px-2 rounded backdrop-blur-sm">{p.username} ({p.cardCount})</span>
 
                                 {/* Opponent Cards Mini */}
-                                <div className="flex -space-x-2 mt-1">
-                                    {Array.from({ length: Math.min(p.cardCount, 3) }).map((_, idx) => (
-                                        <div key={idx} className="w-4 h-6 bg-blue-900 border border-blue-400 rounded-sm" />
-                                    ))}
-                                </div>
+                                {isSpectator ? (
+                                    <div className="flex -space-x-8 mt-1 justify-center">
+                                        {p.hand && p.hand.map((card) => (
+                                            <div key={card.id} className="relative transform hover:-translate-y-2 transition-transform">
+                                                <Card card={card} isPlayable={false} size="small" />
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="flex -space-x-2 mt-1">
+                                        {Array.from({ length: Math.min(p.cardCount, 3) }).map((_, idx) => (
+                                            <div key={idx} className="w-4 h-6 bg-blue-900 border border-blue-400 rounded-sm" />
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )
                     })}
@@ -445,7 +455,7 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                 </div>
 
                 {/* PLAYER HAND AREA */}
-                <div className="absolute bottom-0 w-full flex flex-col items-center pb-4 z-20 pointer-events-auto">
+                <div className="absolute bottom-0 w-full flex flex-col items-center pb-4 z-50 pointer-events-auto">
                     {/* Controls */}
                     <div className="mb-4 h-12 flex gap-4">
                         {isMyTurn && myPlayer && !myPlayer.finished && gameState.phase === 'PLAYING' && (

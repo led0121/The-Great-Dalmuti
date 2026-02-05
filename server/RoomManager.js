@@ -145,6 +145,14 @@ class RoomManager {
         }
     }
 
+    handleRevolutionChoice(socket, declare) {
+        const roomId = socket.data.roomId;
+        const room = this.rooms.get(roomId);
+        if (room && room.game) {
+            room.game.handleRevolutionChoice(socket.id, declare);
+        }
+    }
+
     handleMarketTrade(socket, cardId) {
         const roomId = socket.data.roomId;
         const room = this.rooms.get(roomId);
