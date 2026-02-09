@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { motion } from 'framer-motion'
+import { motion, useDragControls } from 'framer-motion'
 import { useLanguage } from '../App'
 
 export default function Chat({ socket, username, room }) {
@@ -29,17 +29,24 @@ export default function Chat({ socket, username, room }) {
         }
     }
 
+    const dragControls = useDragControls()
+
     return (
         <motion.div
             drag
+            dragListener={false}
+            dragControls={dragControls}
             dragMomentum={false}
             dragElastic={0.1}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="absolute top-4 right-4 w-64 h-80 bg-gray-800/90 border border-gray-600 rounded-lg flex flex-col shadow-xl z-50 overflow-hidden"
+            className="absolute top-4 right-4 w-64 h-80 bg-gray-800/90 border border-gray-600 rounded-lg flex flex-col shadow-xl z-50 overflow-hidden resize min-w-[200px] min-h-[300px]"
         >
             {/* Header - Drag Handle */}
-            <div className="p-2 border-b border-gray-600 bg-gray-900/50 rounded-t-lg cursor-move active:cursor-grabbing">
+            <div
+                onPointerDown={(e) => dragControls.start(e)}
+                className="p-2 border-b border-gray-600 bg-gray-900/50 rounded-t-lg cursor-move active:cursor-grabbing touch-none"
+            >
                 <h3 className="text-sm font-bold text-gray-300 pointer-events-none">{t('chatTitle')}</h3>
             </div>
 

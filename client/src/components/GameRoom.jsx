@@ -435,7 +435,7 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                                     <Card card={c} isPlayable={false} size="normal" />
                                 </motion.div>
                             ))}
-                            <div className="absolute top-full text-center w-full mt-4 font-bold text-sm text-yellow-500 bg-black/50 rounded px-2">
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-4 font-bold text-sm text-yellow-500 bg-black/50 rounded px-2 whitespace-nowrap w-max">
                                 Last: {gameState.players.find(p => p.id === gameState.lastMove.playerId)?.username}
                             </div>
                         </div>
