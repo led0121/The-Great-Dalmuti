@@ -48,8 +48,13 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
     // --- Strict Play Validation ---
     const isCardPlayable = (card) => {
         // Allow interaction during Taxation and Market
-        if (gameState.phase === 'TAXATION') return myPlayer?.taxDebt > 0;
-        if (gameState.phase === 'MARKET') return !myPlayer?.marketPassed;
+        if (gameState.phase === 'TAXATION') {
+            return myPlayer?.taxDebt > 0;
+        }
+
+        if (gameState.phase === 'MARKET') {
+            return !myPlayer?.marketPassed;
+        }
 
         if (!isMyTurn) return false;
         if (gameState.phase !== 'PLAYING') return false;
@@ -59,12 +64,12 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
 
         // Last Move Analysis
         const lastCards = gameState.lastMove.cards;
-        const lastCount = lastCards.length;
+        // const lastCount = lastCards.length; // Unused
 
         // Determine Last Rank (Joker aware logic, backend uses similar)
         // Simple heuristic: Lowest non-joker rank. If all jokers, 13? (Usually best possible)
         const nonJokers = lastCards.filter(c => !c.isJoker);
-        const lastRank = nonJokers.length > 0 ? nonJokers[0].rank : 13;
+        // const lastRank = nonJokers.length > 0 ? nonJokers[0].rank : 13; // Unused
 
         // Current Hand Selection Logic?
         // Wait, 'isCardPlayable' usually checks if a SINGLE card CAN be part of a valid move.
@@ -133,12 +138,28 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
     const handleRestart = () => socket.emit('restart_game');
     const handleTaxationSubmit = () => {
         if (!myPlayer || selectedCards.length !== myPlayer.taxDebt) return;
-        const isDalmutiSide = myPlayer.rank <= 2; // Rank 1 or 2
-        if (isDalmutiSide) {
+
+        // Rank 1 (Dalmuti) and Rank 2 (Lesser Dalmuti) RETURN cards.
+        // Rank N (Peon) and Rank N-1 (Lesser Peon) PAY tax.
+        // Game.js logic: dalmuti.hand.push(...taxes) then receiver.taxDebt = count.
+        // So initially, Dalmuti has NO debt. Peon has debt.
+        // Wait, if Dalmuti has NO debt initially, then myPlayer.taxDebt is 0?
+        // Let's check Game.js initTaxation.
+        // "peon.taxDebt = 2". Dalmuti has 0.
+        // SO Dalmuti cannot select cards if check is "taxDebt > 0"?
+        // AH! Dalmuti only gets debt AFTER receiving cards (in handleAutoTaxation or if manual).
+        // BUT current requirement is "Peon selects manually".
+        // If Peon pays manually, then Dalmuti receives, THEN Dalmuti has debt.
+        // So for PEON, taxDebt > 0 is correct.
+        // For DALMUTI, initially taxDebt is 0. They wait.
+        // Once Peon pays, Dalmuti gets debt. THEN they can select.
+
+        if (myPlayer.rank <= 2) {
             socket.emit('taxation_return', selectedCards);
         } else {
             socket.emit('taxation_pay', selectedCards);
         }
+        setSelectedCards([]);
     }
     const handleMarketTrade = () => {
         if (selectedCards.length === 1) {
@@ -148,8 +169,8 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
     }
     const handleMarketPass = () => socket.emit('market_pass');
 
-    const handleSeatSelect = () => {
-        socket.emit('select_seat_card');
+    const handleSeatSelect = (cardId) => {
+        socket.emit('select_seat_card', cardId);
     }
 
     const handlePlayClick = () => {
@@ -246,21 +267,25 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                     <p className="mb-8 text-xl text-gray-300">{t('challengerMessage')}</p>
                 )}
 
-                <div className="flex gap-4 mb-12">
-                    {Array.from({ length: gameState.seatDeckCount || 0 }).map((_, i) => (
-                        <motion.div
-                            key={i}
-                            initial={{ y: -100, opacity: 0 }}
-                            animate={{ y: 0, opacity: 1 }}
-                            transition={{ delay: i * 0.1 }}
-                            className="relative cursor-pointer hover:-translate-y-4 transition-transform"
-                            onClick={handleSeatSelect}
-                        >
-                            <div className="w-32 h-48 bg-blue-900 rounded-xl border-4 border-white/20 shadow-xl flex items-center justify-center bg-card-pattern">
-                                <span className="text-4xl opacity-50">?</span>
-                            </div>
-                        </motion.div>
-                    ))}
+                <div className="flex gap-4 mb-12 flex-wrap justify-center">
+                    {(gameState.seatDeck || Array.from({ length: gameState.seatDeckCount || 0 })).map((cardOrIndex, i) => {
+                        // Support both new object based and old count based (safeguard)
+                        const cardId = cardOrIndex.id ? cardOrIndex.id : `seat-${i}`;
+                        return (
+                            <motion.div
+                                key={cardId}
+                                initial={{ y: -100, opacity: 0 }}
+                                animate={{ y: 0, opacity: 1 }}
+                                transition={{ delay: i * 0.1 }}
+                                className="relative cursor-pointer hover:-translate-y-4 transition-transform"
+                                onClick={() => handleSeatSelect(cardId)}
+                            >
+                                <div className="w-32 h-48 bg-blue-900 rounded-xl border-4 border-white/20 shadow-xl flex items-center justify-center bg-card-pattern">
+                                    <span className="text-4xl opacity-50">?</span>
+                                </div>
+                            </motion.div>
+                        )
+                    })}
                 </div>
 
                 {/* Results Area */}
@@ -431,15 +456,27 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                         {/* Market Logic UI */}
                         {gameState.phase === 'MARKET' && (
                             <div className="mt-4">
-                                <p className="mb-4 text-blue-300">{t('marketActive', { count: 0 })}</p>
-                                {selectedCards.length === 1 ? (
-                                    <button onClick={handleMarketTrade} className="bg-blue-600 px-6 py-2 rounded font-bold hover:bg-blue-500 transition-colors animate-bounce">
-                                        {t('tradeBtn')}
-                                    </button>
+                                <p className="mb-4 text-blue-300">
+                                    {t('marketPhase', { time: gameState.timeLeft })}<br />
+                                    {gameState.marketPoolCount !== undefined && `Submitted: ${gameState.marketPoolCount}/${gameState.players.length}`}
+                                </p>
+
+                                {myPlayer?.marketPassed ? (
+                                    <div className="text-green-400 font-bold animate-pulse text-xl">
+                                        {t('waitingForOthers')}
+                                    </div>
                                 ) : (
-                                    <p className="text-sm text-gray-400">Select 1 card to trade</p>
+                                    <>
+                                        <div className="text-sm text-gray-300 mb-2">
+                                            {selectedCards.length > 0 ? `Selected ${selectedCards.length} cards` : t('selectMarketCard')}
+                                        </div>
+                                        <div className="flex gap-2 justify-center">
+                                            <button onClick={() => handleMarketTrade(selectedCards)} className="bg-blue-600 px-6 py-2 rounded font-bold hover:bg-blue-500 transition-colors">
+                                                {selectedCards.length > 0 ? t('submitToMarket') : t('passBtn')}
+                                            </button>
+                                        </div>
+                                    </>
                                 )}
-                                <button onClick={handleMarketPass} className="block mx-auto mt-4 text-gray-500 hover:text-white underline text-sm">{t('passBtn')}</button>
                             </div>
                         )}
                     </div>
@@ -492,9 +529,9 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                                         key={card.id}
                                         className={`relative transition-all duration-200 
                                     ${!playable && !card.isJoker ? 'brightness-50 grayscale cursor-not-allowed' : 'cursor-pointer hover:-translate-y-6 hover:z-50'} 
-                                    ${selected ? '-translate-y-10 z-40 ring-4 ring-green-500 rounded-lg' : ''}
-                                `}
-                                        onClick={() => toggleCardSelection(card.id)}
+                                        ${selected ? '-translate-y-10 z-40 ring-4 ring-green-500 rounded-lg' : ''}
+                                    `}
+                                        onClick={() => handleCardClick(card.id)}
                                     >
                                         <Card card={card} isPlayable={true} />
                                     </motion.div>
