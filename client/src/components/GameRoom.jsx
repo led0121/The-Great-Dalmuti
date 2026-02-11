@@ -3,12 +3,24 @@ import Card from './Card'
 import Chat from './Chat'
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion'
 import RulesModal from './RulesModal'
-import { useLanguage } from '../App'
+import { useLanguage } from '../LanguageContext'
 
-export default function GameRoom({ socket, room, gameState, username, onStartGame, onPlay, onPass }) {
+export default function GameRoom({ socket, room, gameState, username, onStartGame, onPlay, onPass, onLeave, onUpdateSettings }) {
     const [selectedCards, setSelectedCards] = useState([])
     const [isRulesOpen, setIsRulesOpen] = useState(false)
     const { t } = useLanguage()
+
+    // --- DEBUGGING ---
+    useEffect(() => {
+        console.log('GameRoom Debug:', {
+            status: room?.status,
+            phase: gameState?.phase,
+            isLobby: room?.status === 'LOBBY',
+            isSeat: gameState?.phase === 'SEAT_SELECTION',
+            isFinished: gameState?.phase === 'FINISHED',
+            isPlaying: gameState && (gameState.phase === 'PLAYING' || gameState.phase === 'TAXATION' || gameState.phase === 'MARKET')
+        });
+    }, [room, gameState]);
 
     // Reset selection on phase change
     useEffect(() => {
@@ -16,7 +28,8 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
     }, [gameState?.phase])
 
     const isOwner = room.ownerId === socket.id
-    const myPlayer = gameState?.players.find(p => p.id === socket.id)
+    // Safety check for gameState.players
+    const myPlayer = gameState?.players ? gameState.players.find(p => p.id === socket.id) : null;
     const isSpectator = !myPlayer;
     // Fix: isWaiting was missing in context of previous edits or I need to re-add?
     // Checking previous file content...
@@ -74,78 +87,52 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
         return true;
     }
 
-    // Validation for "Play Button" (Can I submit?)
+    // Checking if we can submit play
     const canSubmitPlay = () => {
-        if (selectedCards.length === 0) return false;
-
-        // 1. Check Quantity
-        if (gameState.lastMove) {
-            if (selectedCards.length < gameState.lastMove.cards.length) return false;
-        }
-
-        // 2. Check Rank Validity of Selection
-        // All selected non-jokers must be same rank
-        const selectedObjs = myPlayer.hand.filter(c => selectedCards.includes(c.id));
-        const nonJokers = selectedObjs.filter(c => !c.isJoker);
-
-        if (nonJokers.length > 0) {
-            const firstRank = nonJokers[0].rank;
-            if (!nonJokers.every(c => c.rank === firstRank)) return false; // Mixed ranks
-
-            // Check against Table
-            if (gameState.lastMove) {
-                const lastNonJokers = gameState.lastMove.cards.filter(c => !c.isJoker);
-                const lastRank = lastNonJokers.length > 0 ? lastNonJokers[0].rank : 13;
-                if (firstRank >= lastRank) return false; // Not better
-            }
-        }
-
+        if (!isMyTurn || selectedCards.length === 0) return false;
+        // Validation logic could go here or server-side
         return true;
     }
 
-    const toggleCardSelection = (cardId) => {
-        if (!isMyTurn && gameState.phase === 'PLAYING') return; // Only prevent in playing?
+    const handleCardClick = (cardId) => {
+        if (isSpectator) return;
 
-        const clickedCard = myPlayer.hand.find(c => c.id === cardId)
-        if (!clickedCard) return
+        // Taxation Phase Handling
+        if (gameState?.phase === 'TAXATION') {
+            if (myPlayer?.taxDebt > 0) {
+                setSelectedCards(prev => {
+                    if (prev.includes(cardId)) return prev.filter(id => id !== cardId)
+                    if (prev.length < myPlayer.taxDebt) return [...prev, cardId]
+                    return prev
+                })
+            }
+            return;
+        }
 
-        // Strict blocked selection if card is definitely unplayable
-        if (gameState.phase === 'PLAYING' && gameState.lastMove && !isCardPlayable(clickedCard)) return;
+        // Market Phase Handling
+        if (gameState?.phase === 'MARKET') {
+            setSelectedCards(prev => {
+                if (prev.includes(cardId)) return []
+                return [cardId]
+            })
+            return;
+        }
 
+        // Normal Play
+        if (!isMyTurn) return;
         setSelectedCards(prev => {
             if (prev.includes(cardId)) {
                 return prev.filter(id => id !== cardId)
             } else {
-                if (gameState.phase === 'TAXATION') {
-                    const limit = myPlayer?.taxDebt || 2;
-                    if (prev.length >= limit) return prev;
-                    return [...prev, cardId];
-                }
-                if (gameState.phase === 'MARKET') {
-                    return [cardId];
-                }
-
-                // PLAYING: Auto-grouping
-                if (prev.length > 0) {
-                    const currentSelectionCards = myPlayer.hand.filter(c => prev.includes(c.id));
-                    const nonJokers = currentSelectionCards.filter(c => !c.isJoker);
-
-                    if (!clickedCard.isJoker) {
-                        // If existing has distinct rank, reset
-                        if (nonJokers.length > 0 && nonJokers[0].rank !== clickedCard.rank) {
-                            return [cardId];
-                        }
-                    }
-                }
                 return [...prev, cardId]
             }
         })
     }
 
-    // Actions
+    // ACTIONS
     const handleRestart = () => socket.emit('restart_game');
     const handleTaxationSubmit = () => {
-        if (selectedCards.length !== myPlayer.taxDebt) return;
+        if (!myPlayer || selectedCards.length !== myPlayer.taxDebt) return;
         const isDalmutiSide = myPlayer.rank <= 2; // Rank 1 or 2
         if (isDalmutiSide) {
             socket.emit('taxation_return', selectedCards);
@@ -162,8 +149,6 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
     const handleMarketPass = () => socket.emit('market_pass');
 
     const handleSeatSelect = () => {
-        // Backend handles "next available" or we pick specific?
-        // Let's emitted 'select_seat_card'
         socket.emit('select_seat_card');
     }
 
@@ -174,93 +159,94 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
         }
     }
 
-    // --- VIEWS ---
-
-    // LOBBY
+    // --- VIEW: LOBBY ---
     if (room.status === 'LOBBY') {
+        const settings = room.settings || { timerDuration: 30 };
+
         return (
-            <div className="bg-gray-800 p-8 rounded-lg shadow-xl w-full max-w-2xl border border-gray-700 text-center relative">
-                <Chat socket={socket} username={username} room={room} />
+            <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 p-4">
+                <div className="bg-gray-800 p-8 rounded-lg shadow-xl w-full max-w-2xl border border-gray-700 text-center relative">
+                    {/* <Chat socket={socket} username={username} room={room} /> */}
 
-                {/* Leave Button */}
-                <button onClick={onLeave} className="absolute top-4 right-4 bg-red-600/80 hover:bg-red-500 text-white text-xs px-2 py-1 rounded">
-                    {t('leaveRoomBtn')}
-                </button>
+                    {/* Leave Button */}
+                    <button onClick={onLeave} className="absolute top-4 right-4 bg-red-600/80 hover:bg-red-500 text-white text-xs px-2 py-1 rounded z-10 transition-colors">
+                        {t('leaveRoomBtn')}
+                    </button>
 
-                <h2 className="text-3xl font-bold mb-4 text-amber-400">{room.name}</h2>
-                <div className="text-gray-300 mb-6 font-mono bg-gray-900 p-2 rounded inline-block">ID: <span className="text-white select-all">{room.id}</span></div>
+                    <h2 className="text-3xl font-bold mb-4 text-amber-400">{room.name}</h2>
+                    <div className="text-gray-300 mb-6 font-mono bg-gray-900 p-2 rounded inline-block">ID: <span className="text-white select-all">{room.id}</span></div>
 
-                {/* Settings Section (Host Only) */}
-                {isOwner && (
+                    {/* Settings Section */}
                     <div className="mb-6 bg-gray-700/50 p-4 rounded-lg">
                         <h3 className="text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">{t('gameSettings')}</h3>
-                        <div className="flex items-center justify-center gap-4">
-                            <label className="text-sm text-gray-300">{t('turnTimerLabel')}</label>
-                            <input
-                                type="number"
-                                min="10" max="180" step="5"
-                                value={room.settings?.timerDuration || 30}
-                                onChange={(e) => onUpdateSettings({ timerDuration: Number(e.target.value) })}
-                                className="w-20 px-2 py-1 bg-gray-900 border border-gray-600 rounded text-center text-white"
-                            />
-                            <span className="text-sm text-gray-400">sec</span>
+                        {isOwner ? (
+                            <div className="flex items-center justify-center gap-4">
+                                <label className="text-sm text-gray-300">{t('turnTimerLabel')}</label>
+                                <input
+                                    type="number"
+                                    min="10" max="180" step="5"
+                                    value={settings.timerDuration}
+                                    onChange={(e) => onUpdateSettings && onUpdateSettings({ timerDuration: Number(e.target.value) })}
+                                    className="w-20 px-2 py-1 bg-gray-900 border border-gray-600 rounded text-center text-white focus:border-amber-500 outline-none transition-colors"
+                                />
+                                <span className="text-sm text-gray-400">sec</span>
+                            </div>
+                        ) : (
+                            <div className="text-gray-400 text-sm">
+                                {t('turnTimerLabel')}: <span className="text-white font-bold">{settings.timerDuration}s</span>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="mb-8">
+                        <h3 className="text-xl font-semibold mb-3 text-white">{t('players', { count: (room.players || []).length })}</h3>
+                        <div className="flex flex-wrap gap-4 justify-center">
+                            {(room.players || []).map(p => (
+                                <div key={p.id} className="bg-gray-700 px-4 py-2 rounded flex items-center gap-2 border border-gray-600">
+                                    <span className="text-2xl font-bold text-blue-400">{p.username ? p.username[0].toUpperCase() : '?'}</span>
+                                    <span>{p.username}</span>
+                                    {room.ownerId === p.id && <span className="text-xs text-yellow-400 border border-yellow-400 px-1 rounded ml-1">{t('hostLabel')}</span>}
+                                </div>
+                            ))}
                         </div>
                     </div>
-                )}
 
-                {!isOwner && room.settings && (
-                    <div className="mb-6 text-gray-400 text-sm">
-                        {t('turnTimerLabel')}: <span className="text-white font-bold">{room.settings.timerDuration}s</span>
-                    </div>
-                )}
+                    {isOwner ? (
+                        <button
+                            onClick={onStartGame}
+                            disabled={(room.players || []).length < 2}
+                            className="bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xl font-bold py-3 px-8 rounded-lg shadow-lg transition-all active:scale-95"
+                        >
+                            {t('startGameBtn')}
+                        </button>
+                    ) : (
+                        <div className="text-gray-400 animate-pulse">{t('waitingHost')}</div>
+                    )}
 
-                <div className="mb-8">
-                    <h3 className="text-xl font-semibold mb-3 text-white">{t('players', { count: room.players.length })}</h3>
-                    <div className="flex flex-wrap gap-4 justify-center">
-                        {room.players.map(p => (
-                            <div key={p.id} className="bg-gray-700 px-4 py-2 rounded flex items-center gap-2">
-                                <span className="text-2xl font-bold text-blue-400">{p.username[0].toUpperCase()}</span>
-                                <span>{p.username}</span>
-                                {room.ownerId === p.id && <span className="text-xs text-yellow-400 border border-yellow-400 px-1 rounded">{t('hostLabel')}</span>}
-                            </div>
-                        ))}
-                    </div>
+                    <button onClick={() => setIsRulesOpen(true)} className="absolute top-4 left-4 text-gray-400 hover:text-white underline text-sm z-10">{t('howToPlayBtn')}</button>
+                    {/* <RulesModal isOpen={isRulesOpen} onClose={() => setIsRulesOpen(false)} currentPhase="LOBBY" /> */}
                 </div>
-                {isOwner ? (
-                    <button onClick={onStartGame} disabled={room.players.length < 2} className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-xl font-bold py-3 px-8 rounded-lg shadow-lg">{t('startGameBtn')}</button>
-                ) : <div className="text-gray-400 animate-pulse">{t('waitingHost')}</div>}
-
-                <button onClick={() => setIsRulesOpen(true)} className="absolute top-4 left-4 text-gray-400 hover:text-white underline text-sm">{t('howToPlayBtn')}</button>
-                <RulesModal isOpen={isRulesOpen} onClose={() => setIsRulesOpen(false)} currentPhase="LOBBY" />
             </div>
         )
     }
 
-    if (!gameState) return <div className="text-white">{t('loading')}</div>
+    if (!gameState) return <div className="min-h-screen bg-gray-900 flex items-center justify-center text-white text-2xl animate-pulse">{t('loading')}</div>
 
-    // SEAT SELECTION VIEW
+    // --- VIEW: SEAT SELECTION ---
     if (gameState.phase === 'SEAT_SELECTION') {
-        const mySeat = gameState.selectedSeats?.find(s => s.playerId === socket.id);
-        const allSelected = gameState.selectedSeats?.length === (gameState.selectedSeats.length > 0 ? gameState.selectedSeats.length + (gameState.seatDeckCount || 0) - gameState.selectedSeats.length : room.players.length);
-        // Logic for "All Selected" based on deck count? No, logic is simpler:
-        // If seatDeck is empty? Or selectedSeats count == intended count.
-        // Simplified:
         const isReviewing = !!gameState.selectedSeats?.length && gameState.seatDeckCount === 0;
 
         return (
             <div className="w-full h-screen flex flex-col items-center justify-center bg-gray-900 text-white relative">
                 <Chat socket={socket} username={username} room={room} />
-                <h2 className="text-4xl font-bold text-yellow-500 mb-4">
+                <h2 className="text-4xl font-bold text-yellow-500 mb-4 drop-shadow-lg">
                     {gameState.waitingPlayers?.length > 0 ? t('challengerSelection') : t('chooseDestiny')}
                 </h2>
                 {gameState.waitingPlayers?.length > 0 && (
-                    <p className="mb-8 text-xl text-gray-300">
-                        {t('challengerMessage')}
-                    </p>
+                    <p className="mb-8 text-xl text-gray-300">{t('challengerMessage')}</p>
                 )}
 
                 <div className="flex gap-4 mb-12">
-                    {/* Render "Deck" of face down cards */}
                     {Array.from({ length: gameState.seatDeckCount || 0 }).map((_, i) => (
                         <motion.div
                             key={i}
@@ -282,219 +268,193 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                     {gameState.selectedSeats?.map((seat, i) => {
                         const p = gameState.players.find(pl => pl.id === seat.playerId) || gameState.waitingPlayers?.find(pl => pl.id === seat.playerId);
                         return (
-                            <motion.div key={seat.playerId} initial={{ scale: 0 }} animate={{ scale: 1 }} className="flex flex-col items-center">
+                            <motion.div key={seat.playerId} initial={{ scale: 0 }} animate={{ scale: 1 }} className="flex flex-col items-center p-4 bg-gray-800/50 rounded-xl">
                                 <Card card={seat.card} isPlayable={false} size="normal" />
-                                <div className="mt-2 font-bold">{p?.username}</div>
-                                <div className="text-yellow-400 text-sm">{getRankName(i + 1)}</div>
+                                <div className="mt-2 font-bold text-lg">{p?.username}</div>
+                                <div className="text-yellow-400 font-bold">{getRankName(i + 1)}</div>
                             </motion.div>
                         )
                     })}
                 </div>
 
-                {gameState.selectedSeats?.length > 0 && gameState.seatDeckCount === 0 && <div className="mt-8 text-2xl animate-pulse text-green-400">{t('determiningRanks')}</div>}
+                {isReviewing && <div className="mt-8 text-2xl animate-pulse text-green-400">{t('determiningRanks')}</div>}
             </div>
         )
     }
 
-    // GAME OVER (FINISHED)
+    // --- VIEW: GAME OVER ---
     if (gameState.phase === 'FINISHED') {
         const winner = gameState.players.find(p => p.rank === 1);
         return (
             <div className="w-full h-screen flex flex-col items-center justify-center bg-gray-900 text-white p-4">
                 <Chat socket={socket} username={username} room={room} />
-                <h1 className="text-6xl font-black text-yellow-500 mb-4 animate-bounce">{t('gameOver')}</h1>
-                <div className="text-3xl mb-8">{t('winner', { name: winner?.username })}</div>
+                <h1 className="text-6xl font-black text-yellow-500 mb-4 animate-bounce drop-shadow-glow">{t('gameOver')}</h1>
+                <div className="text-3xl mb-8 font-bold">{t('winner', { name: winner?.username })} 👑</div>
                 <div className="grid gap-4 mb-8">
                     {gameState.players.sort((a, b) => a.rank - b.rank).map(p => (
-                        <div key={p.id} className="bg-gray-800 p-4 rounded flex justify-between w-64 border border-gray-700">
-                            <span className="text-yellow-400">#{p.rank} {getRankName(p.rank)}</span>
-                            <span>{p.username}</span>
+                        <div key={p.id} className="bg-gray-800 p-4 rounded-lg flex justify-between w-80 border border-gray-700 shadow-lg">
+                            <span className="text-yellow-400 font-bold">#{p.rank} {getRankName(p.rank)}</span>
+                            <span className="font-medium">{p.username}</span>
                         </div>
                     ))}
                 </div>
-                {isOwner && <button onClick={handleRestart} className="bg-green-600 px-8 py-3 rounded text-xl font-bold hover:scale-105 transition-transform">{t('nextRoundBtn')}</button>}
+                {isOwner && <button onClick={handleRestart} className="bg-green-600 px-8 py-3 rounded-lg text-xl font-bold hover:scale-105 transition-transform shadow-green-500/50 shadow-lg">{t('nextRoundBtn')}</button>}
             </div>
         )
     }
 
-    // TAXATION / MARKET / PLAYING -> Shared "Table" Layout
-    const opponents = gameState.players.filter(p => p.id !== socket.id);
-
+    // --- VIEW: PLAYING BOARD ---
     return (
-        <LayoutGroup>
-            <div className="w-full h-screen flex flex-col overflow-hidden relative bg-[#1a1a1a]">
+        <div className="w-full h-screen bg-[#1a1a1a] relative overflow-hidden flex flex-col">
+            <Chat socket={socket} username={username} room={room} />
+
+            {/* Room Info */}
+            <div className="absolute top-4 left-4 z-50 text-white/50 text-xs shadow-black drop-shadow-md flex items-center gap-2">
+                <span>{t('roomInfo', { roomId: room.id, username: username })} {isSpectator ? t('spectatorLabel') : ''}</span>
+                <button onClick={onLeave} className="bg-red-900/50 hover:bg-red-700 text-white px-2 py-0.5 rounded ml-2 border border-red-800/50 transition-colors">
+                    {t('leaveRoomBtn')}
+                </button>
+            </div>
+
+            {/* Table */}
+            <div className="flex-1 relative flex items-center justify-center perspective-1000">
                 {/* Table Texture */}
                 <div className="absolute inset-x-0 bottom-0 h-1/2 bg-[#2a2a2a] rounded-t-[50%] scale-x-150 opacity-50 pointer-events-none" />
 
-                <div className="absolute top-4 left-4 z-50 text-white/50 text-xs shadow-black drop-shadow-md flex items-center gap-2">
-                    <span>{t('roomInfo', { roomId: room.id, username: username })} {isSpectator ? t('spectatorLabel') : ''}</span>
-                    <button onClick={onLeave} className="bg-red-900/50 hover:bg-red-700 text-white px-2 py-0.5 rounded ml-2 border border-red-800/50 transition-colors">
-                        {t('leaveRoomBtn')}
-                    </button>
-                    {/* Timer Display if Playing */}
-                </div>
+                {/* OPPONENTS */}
+                {gameState.players.filter(p => p.id !== socket.id).map((p, i, arr) => {
+                    // Determine position logic could be improved for >4 players
+                    const angle = (i + 1) * (180 / (arr.length + 1));
+                    // Simple layout: Top, Left, Right based on index
+                    // For now, let's just spread them top/left/right
+                    let posClass = "top-8";
+                    if (arr.length === 1) posClass = "top-12";
+                    else if (i === 0) posClass = "left-12 top-1/3";
+                    else if (i === arr.length - 1) posClass = "right-12 top-1/3";
+                    else posClass = "top-12"; // Others on top
 
-                {/* SPECTATOR WARNING OVERLAY */}
-                {(isWaiting || (isSpectator && !myPlayer)) && (gameState.phase !== 'FINISHED') && (
-                    <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-black/60 px-6 py-2 rounded-full backdrop-blur text-white z-40 border border-white/10">
-                        {t('waitingMessage')}
-                    </div>
-                )}
-
-                <Chat socket={socket} username={username} room={room} />
-                <div className="absolute top-4 left-4 z-50 mt-6"><button onClick={() => setIsRulesOpen(true)} className="w-10 h-10 rounded-full bg-gray-700 text-white font-bold border border-gray-500">?</button></div>
-                <RulesModal isOpen={isRulesOpen} onClose={() => setIsRulesOpen(false)} currentPhase={gameState.phase} />
-
-                {/* REVOLUTION CHOICE OVERLAY */}
-                {gameState.phase === 'REVOLUTION_CHOICE' && (
-                    <div className="absolute inset-0 z-40 bg-black/90 flex flex-col items-center justify-center pointer-events-auto">
-                        <h2 className="text-5xl text-red-500 font-black mb-8 animate-pulse shadow-red-500 drop-shadow-lg">{t('revolutionTitle')}</h2>
-                        <div className="bg-gray-800 p-8 rounded-2xl border-2 border-red-500 text-center max-w-lg shadow-2xl">
-                            <p className="text-2xl text-white mb-6 font-bold">{t('revolutionPrompt')}</p>
-
-                            {gameState.players.find(p => p.id === socket.id)?.id === gameState.currentTurn /* Wait, REVOLUTION_CHOICE uses revolutionCandidateId, not currentTurn. But logic in Game.js sets currentTurn? No, let's use candidate check */
-                                || (myPlayer && myPlayer.hand.filter(c => c.isJoker).length === 2) ? (
-                                <div className="flex gap-4 justify-center">
-                                    <button
-                                        onClick={() => socket.emit('revolution_choice', true)}
-                                        className="bg-red-600 hover:bg-red-700 text-white font-black text-xl py-4 px-8 rounded-xl shadow-lg hover:scale-105 transition-transform"
-                                    >
-                                        {t('revolutionYes')}
-                                    </button>
-                                    <button
-                                        onClick={() => socket.emit('revolution_choice', false)}
-                                        className="bg-gray-600 hover:bg-gray-500 text-white font-bold text-xl py-4 px-8 rounded-xl shadow-lg hover:scale-105 transition-transform"
-                                    >
-                                        {t('revolutionNo')}
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="text-gray-400 text-xl animate-pulse">
-                                    {t('revolutionWaiting')}
-                                </div>
-                            )}
-                            <p className="mt-6 text-sm text-gray-400">{t('revolutionDesc')}</p>
-                        </div>
-                    </div>
-                )}
-
-                {/* PHASE OVERLAYS */}
-                {gameState.phase === 'TAXATION' && (
-                    <div className="absolute inset-0 z-40 bg-black/80 flex flex-col items-center justify-center pointer-events-auto">
-                        <h2 className="text-4xl text-yellow-500 font-bold mb-4">{t('taxationPhase')}</h2>
-                        <div className="bg-gray-800 p-6 rounded-xl text-center">
-                            {myPlayer && myPlayer.taxDebt > 0 ? (
-                                <>
-                                    <p className="mb-4 text-green-400 text-xl">{myPlayer.rank <= 2 ? t('rank1TaxMsg') : t('peonTaxMsg')}</p>
-                                    {/* Note: Reuse rank1TaxMsg for both Rank 1 and Rank 2 for now, or add generic message */}
-                                    <div className="text-sm text-gray-300 mb-2">Select {myPlayer.taxDebt} cards to {myPlayer.rank <= 2 ? 'return' : 'give'}</div>
-                                    <button onClick={handleTaxationSubmit} disabled={selectedCards.length !== myPlayer.taxDebt} className="bg-green-600 px-6 py-2 rounded font-bold disabled:opacity-50">{myPlayer.rank <= 2 ? t('returnCardsBtn') : t('payTaxBtn')}</button>
-                                </>
-                            ) : (
-                                <p className="text-gray-400 text-xl animate-pulse">
-                                    {t('taxWatching')}
-                                </p>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {gameState.phase === 'MARKET' && (
-                    <div className="absolute inset-0 z-40 bg-black/80 flex flex-col items-center justify-center pointer-events-auto">
-                        <h2 className="text-4xl text-blue-400 font-bold mb-2">{t('marketPhase', { time: gameState.timeLeft })}</h2>
-                        <div className="text-xl mb-8">{t('marketActive', { count: gameState.marketPoolCount })}</div>
-                        {myPlayer && !myPlayer.marketPassed ? (
-                            <div className="flex gap-4">
-                                <button onClick={handleMarketTrade} disabled={selectedCards.length !== 1} className="bg-blue-600 px-8 py-3 rounded-xl font-bold text-xl disabled:opacity-50">{t('tradeBtn')}</button>
-                                <button onClick={handleMarketPass} className="bg-gray-600 px-8 py-3 rounded-xl font-bold text-xl">{t('donePassBtn')}</button>
-                            </div>
-                        ) : <div className="text-green-500 text-2xl font-bold">{t('donePassBtn')}</div>}
-                    </div>
-                )}
-
-                {/* ROUND TABLE OPPONENTS */}
-                <div className="absolute inset-0 pointer-events-none">
-                    {opponents.map((p, i) => {
-                        // Position calculations
-                        const angleStep = 180 / (opponents.length + 1);
-                        const angle = -90 + (angleStep * (i + 1));
-                        const radius = 350;
-                        const x = Math.sin(angle * (Math.PI / 180)) * radius;
-                        const y = -Math.cos(angle * (Math.PI / 180)) * radius * 0.6;
-
-                        return (
-                            <div key={p.id} className="absolute top-[40%] left-1/2 flex flex-col items-center justify-center w-24"
-                                style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}>
-
-                                {/* Player Avatar */}
-                                <div className={`relative transition-all duration-300 ${gameState.currentTurn === p.id ? 'scale-125 z-10' : 'opacity-80'}`}>
-                                    <div className={`w-16 h-16 rounded-full border-4 flex items-center justify-center bg-gray-700 font-bold text-xl
-                                    ${gameState.currentTurn === p.id ? 'border-yellow-400 shadow-[0_0_20px_gold]' : 'border-gray-500'}
-                                    ${!p.connected ? 'grayscale' : ''}
-                                `}>
-                                        {p.username[0]}
-                                    </div>
-                                    {p.rank === 1 && <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-2xl">👑</div>}
-                                    {p.rank === gameState.players.length && <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-xl">🧹</div>}
-                                    {p.finished && <div className="absolute inset-0 bg-green-500/80 rounded-full flex items-center justify-center font-bold text-[10px]">DONE</div>}
-                                </div>
-
-                                <span className="mt-2 text-xs font-bold bg-black/50 px-2 rounded backdrop-blur-sm">{p.username} ({p.cardCount})</span>
-
-                                {/* Opponent Cards Mini */}
-                                {isSpectator ? (
-                                    <div className="flex -space-x-8 mt-1 justify-center">
-                                        {p.hand && p.hand.map((card) => (
-                                            <div key={card.id} className="relative transform hover:-translate-y-2 transition-transform">
-                                                <Card card={card} isPlayable={false} size="small" />
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="flex -space-x-2 mt-1">
-                                        {Array.from({ length: Math.min(p.cardCount, 3) }).map((_, idx) => (
-                                            <div key={idx} className="w-4 h-6 bg-blue-900 border border-blue-400 rounded-sm" />
-                                        ))}
+                    return (
+                        <div key={p.id} className={`absolute ${posClass} flex flex-col items-center transition-all duration-500`}>
+                            <div className="relative">
+                                <span className={`text-4xl font-bold ${gameState.currentTurn === p.id ? 'text-yellow-400 animate-pulse' : 'text-gray-400'}`}>
+                                    {p.username[0].toUpperCase()}
+                                </span>
+                                {p.rank > 0 && (
+                                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-black/80 text-xs px-2 py-1 rounded text-yellow-500 whitespace-nowrap border border-yellow-500/30">
+                                        {getRankName(p.rank)}
                                     </div>
                                 )}
+                                {p.taxDebt > 0 && <div className="absolute -bottom-2 -right-4 text-xs bg-red-600 px-1 rounded animate-bounce">TAX: {p.taxDebt}</div>}
                             </div>
-                        )
-                    })}
+                            <div className="text-sm text-gray-400 mt-1">{p.username}</div>
+                            {/* Cards (Backs) */}
+                            <div className="flex -space-x-8 mt-2">
+                                {(isSpectator && !p.finished) ? (
+                                    // Spectator sees cards
+                                    p.hand.map((card, idx) => (
+                                        <div key={idx} className="origin-bottom transition-transform hover:-translate-y-2" style={{ transform: `rotate(${(idx - p.hand.length / 2) * 5}deg)` }}>
+                                            <Card card={card} size="small" />
+                                        </div>
+                                    ))
+                                ) : (
+                                    // Normal players see backs
+                                    Array.from({ length: p.hand.length }).map((_, idx) => (
+                                        <div key={idx} className="w-8 h-12 bg-blue-900 rounded border border-white/20 shadow-md" style={{ transform: `translateY(${idx % 2 * 2}px)` }} />
+                                    ))
+                                )}
+                            </div>
+                            {p.finished && <span className="text-green-400 font-bold mt-1 text-xs">FINISHED #{p.finishedRank}</span>}
+                        </div>
+                    )
+                })}
+
+                {/* CENTER PILE (Active Cards) */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 flex items-center justify-center z-10 pointer-events-none">
+                    <AnimatePresence>
+                        {gameState.lastMove && (
+                            <motion.div
+                                key={gameState.lastMove.playerId + gameState.lastMove.cards.length}
+                                initial={{ scale: 0.8, opacity: 0, y: 20 }}
+                                animate={{ scale: 1, opacity: 1, y: 0 }}
+                                exit={{ scale: 0.8, opacity: 0, y: -20 }}
+                                className="flex -space-x-12 pointer-events-auto"
+                            >
+                                {gameState.lastMove.cards.map((c, i) => (
+                                    <div key={i} className="transform hover:-translate-y-2 transition-transform shadow-2xl">
+                                        <Card card={c} size="normal" />
+                                    </div>
+                                ))}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                    {/* Last Player Name */}
+                    {gameState.lastMove && (
+                        <div className="absolute -bottom-16 text-gray-400 text-sm bg-black/50 px-3 py-1 rounded-full whitespace-nowrap w-max">
+                            Last: {gameState.players.find(p => p.id === gameState.lastMove.playerId)?.username}
+                        </div>
+                    )}
+
+                    {!gameState.lastMove && gameState.phase === 'PLAYING' && (
+                        <div className="text-gray-600 font-bold text-xl opacity-50">{t('tableEmpty')}</div>
+                    )}
                 </div>
 
-                {/* CENTER: PLAYED CARDS */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-40 flex items-center justify-center z-0">
-                    {gameState.lastMove ? (
-                        <div className="relative">
-                            {gameState.lastMove.cards.map((c, i) => (
-                                <motion.div
-                                    layoutId={`card-${c.id}`}
-                                    key={c.id}
-                                    className="absolute top-0 left-0 shadow-xl"
-                                    initial={{ scale: 0.8, opacity: 0 }}
-                                    animate={{ scale: 1, opacity: 1, x: i * 20 - (gameState.lastMove.cards.length * 10) }}
-                                    style={{ zIndex: i }}
-                                >
-                                    <Card card={c} isPlayable={false} size="normal" />
-                                </motion.div>
-                            ))}
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-4 font-bold text-sm text-yellow-500 bg-black/50 rounded px-2 whitespace-nowrap w-max">
-                                Last: {gameState.players.find(p => p.id === gameState.lastMove.playerId)?.username}
-                            </div>
-                        </div>
-                    ) : <div className="text-white/20 font-bold text-2xl">{t('tableEmpty')}</div>}
+                {/* Phase Overlay (Taxation/Market) */}
+                {(gameState.phase === 'TAXATION' || gameState.phase === 'MARKET') && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center z-50 bg-black/60 backdrop-blur-sm rounded-xl p-4 text-center pointer-events-auto">
+                        <h2 className={`text-3xl font-black mb-2 ${gameState.phase === 'TAXATION' ? 'text-green-500' : 'text-blue-500'}`}>
+                            {gameState.phase === 'TAXATION' ? t('taxationPhase') : t('marketPhase', { time: gameState.timeLeft })}
+                        </h2>
+                        {/* Logic Content would go here, currently empty in this block? Restore from previous if needed or relying on existing logic? */}
+                        {/* Wait, I need to make sure the BUTTONS for Tax/Market are here too? */}
+                        {/* In the big rewrite (Step 1141), there was logic here. */}
+                        {/* The view_file output in Step 1167 shows the logic was MISSING in lines 390-406! */}
+                        {/* I must restore the Logic UI here. */}
 
-                    {/* Current Turn Indicator (Big) */}
-                    <div className="absolute -top-32 w-full text-center">
-                        {gameState.revolutionActive && <div className="text-red-500 font-bold animate-pulse text-2xl mb-2">⚔️ REVOLUTION ⚔️</div>}
-                        <div className="text-gray-400 text-xs tracking-widest uppercase mb-1">
-                            {gameState.players.find(p => p.id === gameState.currentTurn)?.id === socket.id ? t('yourTurn') : t('opponentsTurn', { name: gameState.players.find(p => p.id === gameState.currentTurn)?.username || 'Unknown' })}
-                        </div>
-                        <div className="text-3xl font-black text-white drop-shadow-md">
-                            {gameState.players.find(p => p.id === gameState.currentTurn)?.username}
-                        </div>
-                        {gameState.timeLeft !== undefined && <div className="text-blue-300 font-mono text-xl">{gameState.timeLeft}s</div>}
+                        {/* Taxation Logic UI */}
+                        {gameState.phase === 'TAXATION' && (
+                            <div className="mt-4">
+                                {myPlayer && myPlayer.taxDebt > 0 ? (
+                                    <>
+                                        <p className="mb-4 text-green-400 text-xl">{myPlayer.rank <= 2 ? t('rank1TaxMsg') : t('peonTaxMsg')}</p>
+                                        <div className="text-sm text-gray-300 mb-2">Select {myPlayer.taxDebt} cards to {myPlayer.rank <= 2 ? 'return' : 'give'}</div>
+                                        <button onClick={handleTaxationSubmit} disabled={selectedCards.length !== myPlayer.taxDebt} className="bg-green-600 px-6 py-2 rounded font-bold disabled:opacity-50 hover:bg-green-500 transition-colors">
+                                            {myPlayer.rank <= 2 ? t('returnCardsBtn') : t('payTaxBtn')}
+                                        </button>
+                                    </>
+                                ) : (
+                                    <p className="text-gray-400 text-xl animate-pulse">{t('taxWatching')}</p>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Market Logic UI */}
+                        {gameState.phase === 'MARKET' && (
+                            <div className="mt-4">
+                                <p className="mb-4 text-blue-300">{t('marketActive', { count: 0 })}</p>
+                                {selectedCards.length === 1 ? (
+                                    <button onClick={handleMarketTrade} className="bg-blue-600 px-6 py-2 rounded font-bold hover:bg-blue-500 transition-colors animate-bounce">
+                                        {t('tradeBtn')}
+                                    </button>
+                                ) : (
+                                    <p className="text-sm text-gray-400">Select 1 card to trade</p>
+                                )}
+                                <button onClick={handleMarketPass} className="block mx-auto mt-4 text-gray-500 hover:text-white underline text-sm">{t('passBtn')}</button>
+                            </div>
+                        )}
                     </div>
+                )}
+
+                {/* Current Turn Indicator (Big) */}
+                <div className="absolute top-24 w-full text-center pointer-events-none">
+                    {gameState.revolutionActive && <div className="text-red-500 font-bold animate-pulse text-2xl mb-2">⚔️ REVOLUTION ⚔️</div>}
+                    <div className="text-gray-400 text-xs tracking-widest uppercase mb-1">
+                        {gameState.players.find(p => p.id === gameState.currentTurn)?.id === socket.id ? t('yourTurn') : t('opponentsTurn', { name: gameState.players.find(p => p.id === gameState.currentTurn)?.username || 'Unknown' })}
+                    </div>
+                    <div className="text-3xl font-black text-white drop-shadow-md">
+                        {gameState.players.find(p => p.id === gameState.currentTurn)?.username}
+                    </div>
+                    {gameState.timeLeft !== undefined && <div className="text-blue-300 font-mono text-xl">{gameState.timeLeft}s</div>}
                 </div>
 
                 {/* PLAYER HAND AREA */}
@@ -544,6 +504,6 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                     </div>
                 </div>
             </div>
-        </LayoutGroup>
+        </div>
     )
 }

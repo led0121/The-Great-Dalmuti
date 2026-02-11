@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useLanguage } from '../App'
+import { useLanguage } from '../LanguageContext'
 
 export default function Login({ onLogin }) {
     const [name, setName] = useState('')

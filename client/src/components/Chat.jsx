@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, useDragControls } from 'framer-motion'
-import { useLanguage } from '../App'
+import { useLanguage } from '../LanguageContext'
 
 export default function Chat({ socket, username, room }) {
     const [messages, setMessages] = useState([])

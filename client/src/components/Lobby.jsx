@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import PatchNotes from './PatchNotes'
-import { useLanguage } from '../App'
+import { useLanguage } from '../LanguageContext'
 
 export default function Lobby({ username, roomList, onCreateRoom, onJoinRoom, onRefreshList }) {
     const [roomName, setRoomName] = useState('')

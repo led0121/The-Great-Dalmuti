@@ -1,9 +1,9 @@
-import { useState, useEffect, createContext, useContext } from 'react'
+import { useState, useEffect } from 'react'
 import io from 'socket.io-client'
 import Login from './components/Login'
 import Lobby from './components/Lobby'
 import GameRoom from './components/GameRoom'
-import { translations } from './translations'
+import { LanguageProvider, useLanguage } from './LanguageContext'
 
 // Initialize socket with dynamic host for LAN support
 const socketUrl = `http://${window.location.hostname}:3000`;
@@ -11,29 +11,17 @@ const socket = io(socketUrl, {
   autoConnect: false
 })
 
-// Language Context
-const LanguageContext = createContext()
-
-export const useLanguage = () => useContext(LanguageContext)
-
-function App() {
+// Content Component to use the hook
+function AppContent() {
+  const { language, setLanguage, t } = useLanguage();
   const [connected, setConnected] = useState(false)
   const [username, setUsername] = useState('') // Logged in user name
   const [currentRoom, setCurrentRoom] = useState(null) // Room data
   const [gameState, setGameState] = useState(null) // Game data
   const [error, setError] = useState(null)
 
-  // Language State (Default Korean as per user request "All languages to Korean")
-  const [language, setLanguage] = useState('ko')
-
-  // Translation Helper
-  const t = (key, params = {}) => {
-    let text = translations[language][key] || key
-    Object.keys(params).forEach(param => {
-      text = text.replace(`{${param}}`, params[param])
-    })
-    return text
-  }
+  // Login Handler needs to be defined here or prop passed down?
+  // Handler logic is independent of language basically, but error messages might need t()
 
   useEffect(() => {
     socket.connect()
@@ -123,56 +111,64 @@ function App() {
   }
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
-      <div className="min-h-screen bg-gray-900 text-white font-sans flex flex-col items-center justify-center p-4 relative">
-        {/* Language Toggle */}
-        <div className="absolute top-4 right-4 z-50 flex gap-2">
-          <button
-            onClick={() => setLanguage('ko')}
-            className={`px-3 py-1 rounded border ${language === 'ko' ? 'bg-amber-500 border-amber-500' : 'bg-transparent border-gray-500 text-gray-400'}`}
-          >
-            한국어
-          </button>
-          <button
-            onClick={() => setLanguage('en')}
-            className={`px-3 py-1 rounded border ${language === 'en' ? 'bg-blue-500 border-blue-500' : 'bg-transparent border-gray-500 text-gray-400'}`}
-          >
-            ENG
-          </button>
-        </div>
-
-        {error && (
-          <div className="fixed top-20 bg-red-500 text-white px-4 py-2 rounded shadow-lg z-50 animate-bounce">
-            {error}
-          </div>
-        )}
-
-        {!username ? (
-          <Login onLogin={handleLogin} />
-        ) : !currentRoom ? (
-          <Lobby
-            username={username}
-            roomList={roomList}
-            onCreateRoom={handleCreateRoom}
-            onJoinRoom={handleJoinRoom}
-            onRefreshList={() => socket.emit('request_room_list')}
-          />
-        ) : (
-          <GameRoom
-            socket={socket}
-            room={currentRoom}
-            gameState={gameState}
-            username={username}
-            onStartGame={handleStartGame}
-            onPlay={handlePlayCards}
-            onPass={handlePass}
-            onUpdateSettings={handleUpdateSettings}
-            onLeave={handleLeaveRoom}
-          />
-        )}
+    <div className="min-h-screen bg-gray-900 text-white font-sans flex flex-col items-center justify-center p-4 relative">
+      {/* Language Toggle */}
+      <div className="absolute top-4 right-4 z-50 flex gap-2">
+        <button
+          onClick={() => setLanguage('ko')}
+          className={`px-3 py-1 rounded border ${language === 'ko' ? 'bg-amber-500 border-amber-500' : 'bg-transparent border-gray-500 text-gray-400'}`}
+        >
+          한국어
+        </button>
+        <button
+          onClick={() => setLanguage('en')}
+          className={`px-3 py-1 rounded border ${language === 'en' ? 'bg-blue-500 border-blue-500' : 'bg-transparent border-gray-500 text-gray-400'}`}
+        >
+          ENG
+        </button>
       </div>
-    </LanguageContext.Provider>
+
+      {error && (
+        <div className="fixed top-20 bg-red-500 text-white px-4 py-2 rounded shadow-lg z-50 animate-bounce">
+          {error}
+        </div>
+      )}
+
+      {!username ? (
+        <Login onLogin={handleLogin} />
+      ) : !currentRoom ? (
+        <Lobby
+          username={username}
+          roomList={roomList}
+          onCreateRoom={handleCreateRoom}
+          onJoinRoom={handleJoinRoom}
+          onRefreshList={() => socket.emit('request_room_list')}
+        />
+      ) : (
+        <GameRoom
+          socket={socket}
+          room={currentRoom}
+          gameState={gameState}
+          username={username}
+          onStartGame={handleStartGame}
+          onPlay={handlePlayCards}
+          onPass={handlePass}
+          onUpdateSettings={handleUpdateSettings}
+          onLeave={handleLeaveRoom}
+        />
+      )}
+    </div>
   )
 }
+
+function App() {
+  return (
+    <LanguageProvider>
+      <AppContent />
+    </LanguageProvider>
+  )
+}
+
+
 
 export default App

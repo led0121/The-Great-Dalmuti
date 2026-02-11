@@ -245,7 +245,6 @@ class RoomManager {
             name: room.name,
             players: room.players,
             ownerId: room.ownerId,
-            ownerId: room.ownerId,
             status: room.status,
             settings: room.settings
         };
