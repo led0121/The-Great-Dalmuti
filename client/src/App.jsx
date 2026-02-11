@@ -59,6 +59,11 @@ function App() {
       setRoomList(list)
     })
 
+    socket.on('left_room', () => {
+      setCurrentRoom(null)
+      setGameState(null)
+    })
+
     socket.on('game_update', (game) => {
       setGameState(game)
     })
@@ -109,6 +114,14 @@ function App() {
     socket.emit('pass_turn');
   }
 
+  const handleUpdateSettings = (settings) => {
+    socket.emit('update_settings', settings);
+  }
+
+  const handleLeaveRoom = () => {
+    socket.emit('leave_room');
+  }
+
   return (
     <LanguageContext.Provider value={{ language, setLanguage, t }}>
       <div className="min-h-screen bg-gray-900 text-white font-sans flex flex-col items-center justify-center p-4 relative">
@@ -153,6 +166,8 @@ function App() {
             onStartGame={handleStartGame}
             onPlay={handlePlayCards}
             onPass={handlePass}
+            onUpdateSettings={handleUpdateSettings}
+            onLeave={handleLeaveRoom}
           />
         )}
       </div>

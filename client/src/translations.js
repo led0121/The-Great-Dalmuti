@@ -34,7 +34,9 @@ export const translations = {
         waitingMessage: "👁️ 관전 중 - 다음 라운드부터 참여합니다!",
         hostLabel: "방장",
         startGameBtn: "게임 시작",
-        waitingHost: "방장이 게임을 시작하기를 기다리는 중...",
+        waitingHost: "방장이 게임을 시작하기를 기다리고 있습니다...",
+        gameSettings: "게임 설정",
+        leaveRoomBtn: "방 나가기",
         howToPlayBtn: "게임 방법",
 
         // Seat Selection
@@ -63,7 +65,9 @@ export const translations = {
         opponentsTurn: "{name}님의 턴",
         taxationPhase: "세금 징수 (Taxation)",
         marketPhase: "시장 거래 (Market) ({time}초)",
-        rank1TaxMsg: "농노에게 돌려줄 카드 2장을 선택하세요",
+        rank1TaxMsg: "귀족이여! 농노에게 돌려줄 카드를 선택하세요.",
+        peonTaxMsg: "농노여! 귀족에게 바칠 세금을 선택하세요.",
+        payTaxBtn: "세금 납부",
         rankLastTaxMsg: "세금을 내는 중입니다... 잠시만 기다려주세요.",
         taxWatching: "세금 납부 지켜보는 중...",
         marketActive: "거래 참여자: {count}명",
@@ -119,7 +123,9 @@ export const translations = {
         waitingMessage: "👁️ Spectating - You will join next round!",
         hostLabel: "HOST",
         startGameBtn: "Start Game",
-        waitingHost: "Waiting for host...",
+        waitingHost: "Waiting for host to start...",
+        gameSettings: "Game Settings",
+        leaveRoomBtn: "Leave Room",
         howToPlayBtn: "How to Play?",
 
         // Seat Selection
@@ -139,8 +145,11 @@ export const translations = {
         playBtn: "Play Cards ({count})",
         passBtn: "Pass",
         tradeBtn: "TRADE (1 Card)",
-        donePassBtn: "Done / Pass",
+        rank1TaxMsg: "Noble! Return 2 cards to the Peon.",
+        peonTaxMsg: "Peon! Pay your tax to the Noble.",
+        payTaxBtn: "Pay Tax",
         returnCardsBtn: "Return Cards", // This key is kept here as it was in the original "Game Actions"
+        donePassBtn: "Done / Pass",
 
         // Game Notices
         tableEmpty: "TABLE EMPTY",

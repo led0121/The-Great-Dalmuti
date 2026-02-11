@@ -144,7 +144,15 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
 
     // Actions
     const handleRestart = () => socket.emit('restart_game');
-    const handleTaxationSubmit = () => selectedCards.length === 2 && socket.emit('taxation_return', selectedCards);
+    const handleTaxationSubmit = () => {
+        if (selectedCards.length !== myPlayer.taxDebt) return;
+        const isDalmutiSide = myPlayer.rank <= 2; // Rank 1 or 2
+        if (isDalmutiSide) {
+            socket.emit('taxation_return', selectedCards);
+        } else {
+            socket.emit('taxation_pay', selectedCards);
+        }
+    }
     const handleMarketTrade = () => {
         if (selectedCards.length === 1) {
             socket.emit('market_trade', selectedCards[0]);
@@ -173,8 +181,39 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
         return (
             <div className="bg-gray-800 p-8 rounded-lg shadow-xl w-full max-w-2xl border border-gray-700 text-center relative">
                 <Chat socket={socket} username={username} room={room} />
+
+                {/* Leave Button */}
+                <button onClick={onLeave} className="absolute top-4 right-4 bg-red-600/80 hover:bg-red-500 text-white text-xs px-2 py-1 rounded">
+                    {t('leaveRoomBtn')}
+                </button>
+
                 <h2 className="text-3xl font-bold mb-4 text-amber-400">{room.name}</h2>
                 <div className="text-gray-300 mb-6 font-mono bg-gray-900 p-2 rounded inline-block">ID: <span className="text-white select-all">{room.id}</span></div>
+
+                {/* Settings Section (Host Only) */}
+                {isOwner && (
+                    <div className="mb-6 bg-gray-700/50 p-4 rounded-lg">
+                        <h3 className="text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">{t('gameSettings')}</h3>
+                        <div className="flex items-center justify-center gap-4">
+                            <label className="text-sm text-gray-300">{t('turnTimerLabel')}</label>
+                            <input
+                                type="number"
+                                min="10" max="180" step="5"
+                                value={room.settings?.timerDuration || 30}
+                                onChange={(e) => onUpdateSettings({ timerDuration: Number(e.target.value) })}
+                                className="w-20 px-2 py-1 bg-gray-900 border border-gray-600 rounded text-center text-white"
+                            />
+                            <span className="text-sm text-gray-400">sec</span>
+                        </div>
+                    </div>
+                )}
+
+                {!isOwner && room.settings && (
+                    <div className="mb-6 text-gray-400 text-sm">
+                        {t('turnTimerLabel')}: <span className="text-white font-bold">{room.settings.timerDuration}s</span>
+                    </div>
+                )}
+
                 <div className="mb-8">
                     <h3 className="text-xl font-semibold mb-3 text-white">{t('players', { count: room.players.length })}</h3>
                     <div className="flex flex-wrap gap-4 justify-center">
@@ -211,7 +250,7 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
         return (
             <div className="w-full h-screen flex flex-col items-center justify-center bg-gray-900 text-white relative">
                 <Chat socket={socket} username={username} room={room} />
-                <h2 className="text-4xl font-bold text-yellow-500 mb-8">
+                <h2 className="text-4xl font-bold text-yellow-500 mb-4">
                     {gameState.waitingPlayers?.length > 0 ? t('challengerSelection') : t('chooseDestiny')}
                 </h2>
                 {gameState.waitingPlayers?.length > 0 && (
@@ -287,8 +326,12 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                 {/* Table Texture */}
                 <div className="absolute inset-x-0 bottom-0 h-1/2 bg-[#2a2a2a] rounded-t-[50%] scale-x-150 opacity-50 pointer-events-none" />
 
-                <div className="absolute top-4 left-4 z-50 text-white/50 text-xs shadow-black drop-shadow-md">
-                    {t('roomInfo', { roomId: room.id, username: username })} {isSpectator ? t('spectatorLabel') : ''}
+                <div className="absolute top-4 left-4 z-50 text-white/50 text-xs shadow-black drop-shadow-md flex items-center gap-2">
+                    <span>{t('roomInfo', { roomId: room.id, username: username })} {isSpectator ? t('spectatorLabel') : ''}</span>
+                    <button onClick={onLeave} className="bg-red-900/50 hover:bg-red-700 text-white px-2 py-0.5 rounded ml-2 border border-red-800/50 transition-colors">
+                        {t('leaveRoomBtn')}
+                    </button>
+                    {/* Timer Display if Playing */}
                 </div>
 
                 {/* SPECTATOR WARNING OVERLAY */}
@@ -342,10 +385,10 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                         <div className="bg-gray-800 p-6 rounded-xl text-center">
                             {myPlayer && myPlayer.taxDebt > 0 ? (
                                 <>
-                                    <p className="mb-4 text-green-400 text-xl">{t('rank1TaxMsg')}</p>
+                                    <p className="mb-4 text-green-400 text-xl">{myPlayer.rank <= 2 ? t('rank1TaxMsg') : t('peonTaxMsg')}</p>
                                     {/* Note: Reuse rank1TaxMsg for both Rank 1 and Rank 2 for now, or add generic message */}
-                                    <div className="text-sm text-gray-300 mb-2">Select {myPlayer.taxDebt} cards to return</div>
-                                    <button onClick={handleTaxationSubmit} disabled={selectedCards.length !== myPlayer.taxDebt} className="bg-green-600 px-6 py-2 rounded font-bold disabled:opacity-50">{t('returnCardsBtn')}</button>
+                                    <div className="text-sm text-gray-300 mb-2">Select {myPlayer.taxDebt} cards to {myPlayer.rank <= 2 ? 'return' : 'give'}</div>
+                                    <button onClick={handleTaxationSubmit} disabled={selectedCards.length !== myPlayer.taxDebt} className="bg-green-600 px-6 py-2 rounded font-bold disabled:opacity-50">{myPlayer.rank <= 2 ? t('returnCardsBtn') : t('payTaxBtn')}</button>
                                 </>
                             ) : (
                                 <p className="text-gray-400 text-xl animate-pulse">

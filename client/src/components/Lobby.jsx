@@ -5,7 +5,6 @@ import { useLanguage } from '../App'
 export default function Lobby({ username, roomList, onCreateRoom, onJoinRoom, onRefreshList }) {
     const [roomName, setRoomName] = useState('')
     const [roomIdToJoin, setRoomIdToJoin] = useState('')
-    const [timerDuration, setTimerDuration] = useState(30)
     const { t } = useLanguage()
 
     return (
@@ -33,18 +32,8 @@ export default function Lobby({ username, roomList, onCreateRoom, onJoinRoom, on
                                     className="flex-1 px-4 py-2 rounded bg-gray-900 border border-gray-600 focus:border-amber-500 focus:outline-none text-white"
                                 />
                             </div>
-                            <div className="flex items-center gap-2 text-sm text-gray-300">
-                                <span>{t('turnTimerLabel')}</span>
-                                <input
-                                    type="number"
-                                    value={timerDuration}
-                                    onChange={(e) => setTimerDuration(Number(e.target.value))}
-                                    className="w-20 px-2 py-1 bg-gray-900 border border-gray-600 rounded text-white"
-                                    min="5" max="120"
-                                />
-                            </div>
                             <button
-                                onClick={() => { if (roomName) onCreateRoom(roomName, { timerDuration }) }}
+                                onClick={() => { if (roomName) onCreateRoom(roomName) }}
                                 className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded font-bold transition-all active:scale-95 w-full"
                             >
                                 {t('createBtn')}

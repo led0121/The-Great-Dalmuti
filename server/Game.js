@@ -346,46 +346,69 @@ class Game {
 
     initTaxation() {
         console.log("Init Taxation. Players:", this.players.map(p => `${p.username}(${p.rank})`));
-        // 1. Great Peon (Last) gives 2 best cards to Great Dalmuti (Rank 1)
+
+        // Clear all debts first
+        this.players.forEach(p => p.taxDebt = 0);
+
+        // 1. Great Peon (Last) owes 2 cards to Great Dalmuti (Rank 1)
         const dalmuti = this.players.find(p => p.rank === 1);
         const peon = this.players.find(p => p.rank === this.players.length);
 
         if (dalmuti && peon) {
-            console.log(`Taxation: ${peon.username} (Rank ${peon.rank}) pays 2 to ${dalmuti.username}`);
-            this.executeForcedTax(peon, dalmuti, 2);
+            console.log(`Taxation: ${peon.username} (Rank ${peon.rank}) owes 2 to ${dalmuti.username}`);
+            peon.taxDebt = 2;
         } else {
             console.error("Critical: Dalmuti or Peon not found during taxation init");
         }
 
-        // 2. Lesser Peon gives 1 best card to Lesser Dalmuti (If 4+ players)
+        // 2. Lesser Peon owes 1 card to Lesser Dalmuti (If 4+ players)
         if (this.players.length >= 4) {
             const lesserDalmuti = this.players.find(p => p.rank === 2);
             const lesserPeon = this.players.find(p => p.rank === this.players.length - 1);
             if (lesserDalmuti && lesserPeon) {
-                console.log(`Taxation: ${lesserPeon.username} pays 1 to ${lesserDalmuti.username}`);
-                this.executeForcedTax(lesserPeon, lesserDalmuti, 1);
+                console.log(`Taxation: ${lesserPeon.username} (Rank ${lesserPeon.rank}) owes 1 to ${lesserDalmuti.username}`);
+                lesserPeon.taxDebt = 1;
             }
         }
     }
 
-    executeForcedTax(giver, receiver, count) {
-        // Giver (Peon) must give lowest Rank cards (Best cards)
-        // Hand might be unsorted due to "random" feature.
-        // We must sort TEMPORARILY to identify best cards, or sort hand permanently for Giver?
-        // Giver is Peon, they lost choice. Sorting their hand is acceptable (and useful).
-        giver.hand.sort((a, b) => a.rank - b.rank);
+    // New: Peon pays tax manually
+    handleTaxationPay(playerId, cardIds) {
+        if (this.phase !== 'TAXATION') return;
+        const player = this.players.find(p => p.id === playerId);
+        if (!player || !player.taxDebt) return;
+        if (cardIds.length !== player.taxDebt) return;
 
-        const taxes = giver.hand.slice(0, count);
-        giver.hand = giver.hand.slice(count);
-        receiver.hand.push(...taxes);
+        // Verify cards
+        const cardsToGive = player.hand.filter(c => cardIds.includes(c.id));
+        if (cardsToGive.length !== player.taxDebt) return;
 
-        // Receiver (Dalmuti) hand remains Unsorted/Mixed (User Request: "receive randomly")
-        // receiver.hand.sort((a, b) => a.rank - b.rank); 
+        // Determine Receiver (Dalmuti)
+        // If Rank Last, Receiver is Rank 1.
+        // If Rank Last-1, Receiver is Rank 2.
+        let targetRank = -1;
+        if (player.rank === this.players.length) targetRank = 1;
+        if (player.rank === this.players.length - 1) targetRank = 2;
 
-        // Track that receiver needs to return 'count' cards
-        if (!receiver.taxDebt) receiver.taxDebt = 0;
-        receiver.taxDebt += count;
-        console.log(`TaxDebt assigned: ${receiver.username} owes ${receiver.taxDebt}`);
+        const receiver = this.players.find(p => p.rank === targetRank);
+        if (!receiver) return;
+
+        // Transfer
+        player.hand = player.hand.filter(c => !cardIds.includes(c.id));
+        receiver.hand.push(...cardsToGive);
+
+        // Sort just in case? Or user wanted random? 
+        // User said: "Cards distributed randomly... not my hand sorted randomly".
+        // But for gameplay consistency, let's just push.
+        player.hand.sort((a, b) => a.rank - b.rank); // Sort Peon's remaining hand
+        receiver.hand.sort((a, b) => a.rank - b.rank); // Sort Dalmuti's new hand
+
+        // Update Debts
+        player.taxDebt = 0; // Paid
+        receiver.taxDebt = cardIds.length; // Now Receiver owes 'count' cards back
+
+        console.log(`Taxation Pay: ${player.username} paid to ${receiver.username}. Now ${receiver.username} owes ${receiver.taxDebt}`);
+        this.broadcastState();
     }
 
     handleTaxationReturn(playerId, cardIds) {

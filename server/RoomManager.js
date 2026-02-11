@@ -4,7 +4,23 @@ const Game = require('./Game');
 class RoomManager {
     constructor(io) {
         this.io = io;
-        this.rooms = new Map(); // roomId -> { id, name, players: [], game: Game | null, ownerId }
+        this.rooms = new Map(); // roomId -> { id, name, players: [], game: Game | null, ownerId, settings: {}, lastActivity: number }
+
+        // Auto-cleanup interval (e.g., every 5 minutes)
+        setInterval(() => this.cleanupRooms(), 5 * 60 * 1000);
+    }
+
+    cleanupRooms() {
+        const now = Date.now();
+        const MAX_INACTIVITY = 30 * 60 * 1000; // 30 minutes
+
+        this.rooms.forEach((room, roomId) => {
+            if (now - room.lastActivity > MAX_INACTIVITY) {
+                console.log(`Auto-deleting inactive room: ${roomId} (${room.name})`);
+                this.rooms.delete(roomId);
+                this.broadcastRoomList();
+            }
+        });
     }
 
     createRoom(socket, roomName) {
@@ -16,7 +32,11 @@ class RoomManager {
             players: [],
             game: null,
             ownerId: socket.id,
-            status: 'LOBBY'
+            status: 'LOBBY',
+            settings: {
+                timerDuration: 30 // Default
+            },
+            lastActivity: Date.now()
         };
         this.rooms.set(roomId, room);
         this.joinRoom(socket, roomId);
@@ -73,9 +93,12 @@ class RoomManager {
         }
 
         room.status = 'PLAYING';
+        room.lastActivity = Date.now();
+
         room.game = new Game(room.players, (gameState) => {
             this.io.to(roomId).emit('game_update', gameState);
-        });
+        }, room.settings); // Pass settings!
+
         room.game.start();
 
         this.io.to(roomId).emit('room_update', this.getRoomData(room));
@@ -85,6 +108,7 @@ class RoomManager {
     handlePlay(socket, { cards }) {
         const room = this.rooms.get(socket.data.roomId);
         if (room && room.game) {
+            room.lastActivity = Date.now();
             const success = room.game.playCards(socket.id, cards);
             if (!success) socket.emit('error', 'Invalid move');
         }
@@ -140,8 +164,46 @@ class RoomManager {
     handleTaxationReturn(socket, cardIds) {
         const roomId = socket.data.roomId;
         const room = this.rooms.get(roomId);
+        if (room) room.lastActivity = Date.now();
+
         if (room && room.game) {
             room.game.handleTaxationReturn(socket.id, cardIds);
+        }
+    }
+
+    handleUpdateSettings(socket, settings) {
+        const roomId = socket.data.roomId;
+        const room = this.rooms.get(roomId);
+        if (!room) return;
+        if (room.ownerId !== socket.id) return; // Only owner
+
+        // Update settings
+        room.settings = { ...room.settings, ...settings };
+        room.lastActivity = Date.now();
+
+        this.io.to(roomId).emit('room_update', this.getRoomData(room));
+    }
+
+    handleLeaveRoom(socket) {
+        const roomId = socket.data.roomId;
+        if (!roomId) return;
+
+        // Use existing disconnect logic but don't disconnect socket entirely
+        this.handleDisconnect(socket);
+
+        // Clean up socket data
+        socket.leave(roomId);
+        delete socket.data.roomId;
+
+        // Send them to lobby list?
+        socket.emit('left_room');
+    }
+
+    handleTaxationPay(socket, cardIds) {
+        const roomId = socket.data.roomId;
+        const room = this.rooms.get(roomId);
+        if (room && room.game) {
+            room.game.handleTaxationPay(socket.id, cardIds);
         }
     }
 
@@ -183,7 +245,9 @@ class RoomManager {
             name: room.name,
             players: room.players,
             ownerId: room.ownerId,
-            status: room.status
+            ownerId: room.ownerId,
+            status: room.status,
+            settings: room.settings
         };
     }
 
