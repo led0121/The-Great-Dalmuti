@@ -474,28 +474,44 @@ class Game {
         this.broadcastState();
     }
 
-    handleMarketTrade(playerId, cardId) {
+    handleMarketTrade(playerId, cardIds) {
         if (this.phase !== 'MARKET') return;
 
         // Check if already submitted
         if (this.marketPasses.has(playerId)) return;
 
+        // If cardIds is empty or null, it's a "Pass" (0 cards), but we still mark as submitted.
+        const ids = Array.isArray(cardIds) ? cardIds : [];
+        if (ids.length === 0) {
+            this.marketPasses.add(playerId);
+            this.checkMarketCompletion();
+            return;
+        }
+
         const player = this.players.find(p => p.id === playerId);
-        const cardIndex = player.hand.findIndex(c => c.id === cardId);
-        if (cardIndex === -1) return;
 
-        // Move card to pool
-        const card = player.hand[cardIndex];
-        player.hand.splice(cardIndex, 1);
+        // Validate ownership
+        const currentHandIds = player.hand.map(c => c.id);
+        const hasAll = ids.every(id => currentHandIds.includes(id));
+        if (!hasAll) return;
 
-        this.marketPool.push({ playerId, card }); // Keep ID just for tracking, but swap will be random
+        // Move cards to pool
+        const cardsToTrade = player.hand.filter(c => ids.includes(c.id));
+        player.hand = player.hand.filter(c => !ids.includes(c.id));
+
+        // Store receipt for redistribution
+        if (!this.marketReceipts) this.marketReceipts = new Map();
+        this.marketReceipts.set(playerId, cardsToTrade.length);
+
+        cardsToTrade.forEach(c => {
+            this.marketPool.push({ playerId, card: c });
+        });
+
         this.marketPasses.add(playerId); // Mark as submitted
+        this.checkMarketCompletion();
+    }
 
-        // Check if all active players submitted
-        // If players < 2, can't market really, but assuming >2
-        const activeCount = this.players.filter(p => p.connected && !p.finished).length; // Actually all players participate in market usually? 
-        // "Free Market" is before round starts, so everyone participates.
-
+    checkMarketCompletion() {
         if (this.marketPasses.size === this.players.length) {
             this.resolveMarketPhase();
         } else {
@@ -511,42 +527,32 @@ class Game {
             [cards[i], cards[j]] = [cards[j], cards[i]];
         }
 
-        // 2. Distribute back (1 to each)
-        // We iterate players matches marketPool submitters order? 
-        // marketPool order is submission order. `cards` is shuffled.
-        this.marketPool.forEach((entry, index) => {
-            const player = this.players.find(p => p.id === entry.playerId);
-            if (player) {
-                player.hand.push(cards[index]);
-                player.hand.sort((a, b) => a.rank - b.rank);
+        // 2. Distribute back (N to each contributor)
+        this.players.forEach(p => {
+            const count = this.marketReceipts ? (this.marketReceipts.get(p.id) || 0) : 0;
+            if (count > 0) {
+                const returned = cards.splice(0, count);
+                p.hand.push(...returned);
+                p.hand.sort((a, b) => a.rank - b.rank);
             }
         });
 
-        console.log("Market resolved. Distributed", cards.length, "cards.");
+        // Clear receipts
+        this.marketReceipts = new Map();
+        this.marketPool = [];
+
+        console.log("Market resolved.");
         this.startPlayingPhase();
     }
 
     handleMarketPass(playerId) {
-        if (this.phase !== 'MARKET') return;
-        this.marketPasses.add(playerId);
-        if (this.marketPasses.size === this.players.length) {
-            this.endMarketPhase();
-        }
+        // Explicit pass is same as trading 0 cards
+        this.handleMarketTrade(playerId, []);
     }
 
     endMarketPhase() {
         if (this.timer) clearInterval(this.timer);
-
-        // Return untraded cards
-        this.marketPool.forEach(item => {
-            const p = this.players.find(pl => pl.id === item.playerId);
-            if (p) {
-                p.hand.push(item.card);
-                p.hand.sort((a, b) => a.rank - b.rank);
-            }
-        });
         this.marketPool = [];
-
         this.startPlayingPhase();
     }
 

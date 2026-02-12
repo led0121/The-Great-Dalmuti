@@ -69,7 +69,7 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
         // Determine Last Rank (Joker aware logic, backend uses similar)
         // Simple heuristic: Lowest non-joker rank. If all jokers, 13? (Usually best possible)
         const nonJokers = lastCards.filter(c => !c.isJoker);
-        // const lastRank = nonJokers.length > 0 ? nonJokers[0].rank : 13; // Unused
+        const lastRank = nonJokers.length > 0 ? nonJokers[0].rank : 13;
 
         // Current Hand Selection Logic?
         // Wait, 'isCardPlayable' usually checks if a SINGLE card CAN be part of a valid move.
@@ -117,8 +117,8 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
         // Market Phase Handling
         if (gameState?.phase === 'MARKET') {
             setSelectedCards(prev => {
-                if (prev.includes(cardId)) return []
-                return [cardId]
+                if (prev.includes(cardId)) return prev.filter(id => id !== cardId)
+                return [...prev, cardId]
             })
             return;
         }
@@ -139,21 +139,6 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
     const handleTaxationSubmit = () => {
         if (!myPlayer || selectedCards.length !== myPlayer.taxDebt) return;
 
-        // Rank 1 (Dalmuti) and Rank 2 (Lesser Dalmuti) RETURN cards.
-        // Rank N (Peon) and Rank N-1 (Lesser Peon) PAY tax.
-        // Game.js logic: dalmuti.hand.push(...taxes) then receiver.taxDebt = count.
-        // So initially, Dalmuti has NO debt. Peon has debt.
-        // Wait, if Dalmuti has NO debt initially, then myPlayer.taxDebt is 0?
-        // Let's check Game.js initTaxation.
-        // "peon.taxDebt = 2". Dalmuti has 0.
-        // SO Dalmuti cannot select cards if check is "taxDebt > 0"?
-        // AH! Dalmuti only gets debt AFTER receiving cards (in handleAutoTaxation or if manual).
-        // BUT current requirement is "Peon selects manually".
-        // If Peon pays manually, then Dalmuti receives, THEN Dalmuti has debt.
-        // So for PEON, taxDebt > 0 is correct.
-        // For DALMUTI, initially taxDebt is 0. They wait.
-        // Once Peon pays, Dalmuti gets debt. THEN they can select.
-
         if (myPlayer.rank <= 2) {
             socket.emit('taxation_return', selectedCards);
         } else {
@@ -161,13 +146,14 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
         }
         setSelectedCards([]);
     }
-    const handleMarketTrade = () => {
-        if (selectedCards.length === 1) {
-            socket.emit('market_trade', selectedCards[0]);
-            setSelectedCards([]);
-        }
+    const handleMarketTrade = (cardsToSubmit = []) => {
+        const cards = Array.isArray(cardsToSubmit) ? cardsToSubmit : selectedCards;
+        socket.emit('market_trade', cards);
+        setSelectedCards([]);
     }
-    const handleMarketPass = () => socket.emit('market_pass');
+    const handleMarketPass = () => {
+        socket.emit('market_trade', []);
+    }
 
     const handleSeatSelect = (cardId) => {
         socket.emit('select_seat_card', cardId);
