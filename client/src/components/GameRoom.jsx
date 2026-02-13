@@ -332,52 +332,101 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                 {/* Table Texture */}
                 <div className="absolute inset-x-0 bottom-0 h-1/2 bg-[#2a2a2a] rounded-t-[50%] scale-x-150 opacity-50 pointer-events-none" />
 
-                {/* OPPONENTS */}
-                {gameState.players.filter(p => p.id !== socket.id).map((p, i, arr) => {
-                    // Determine position logic could be improved for >4 players
-                    const angle = (i + 1) * (180 / (arr.length + 1));
-                    // Simple layout: Top, Left, Right based on index
-                    // For now, let's just spread them top/left/right
-                    let posClass = "top-8";
-                    if (arr.length === 1) posClass = "top-12";
-                    else if (i === 0) posClass = "left-12 top-1/3";
-                    else if (i === arr.length - 1) posClass = "right-12 top-1/3";
-                    else posClass = "top-12"; // Others on top
+                {/* OPPONENTS (CIRCULAR LAYOUT) */}
+                <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                    {gameState.players.filter(p => p.id !== socket.id).map((p, i, arr) => {
+                        // Calculate Position
+                        // We want players distributed in a semi-circle or full circle around the top/center.
+                        // Since "My" player is at bottom, opponents should be from Left -> Top -> Right.
+                        // Total opponents = arr.length.
+                        // Angle range: 180 degrees (from 9:00 to 3:00) or 220 degrees for better spacing?
+                        // Let's use 200 degrees centered at top (-100 to +100 from top-center?). 
+                        // Actually standard math: 0 is Right. -90 is Top. 180 is Left.
+                        // We want them from Left (180) to Right (0) -> roughly 180 to 360(0).
 
-                    return (
-                        <div key={p.id} className={`absolute ${posClass} flex flex-col items-center transition-all duration-500`}>
-                            <div className="relative">
-                                <span className={`text-4xl font-bold ${gameState.currentTurn === p.id ? 'text-yellow-400 animate-pulse' : 'text-gray-400'}`}>
-                                    {p.username[0].toUpperCase()}
-                                </span>
-                                {p.rank > 0 && (
-                                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-black/80 text-xs px-2 py-1 rounded text-yellow-500 whitespace-nowrap border border-yellow-500/30">
-                                        {getRankName(p.rank)}
+                        const total = arr.length;
+                        // Distribute evenly between 160 deg (Left-ish) and 380 deg (Right-ish) (covering top)
+                        // If 1 player: Top (-90).
+                        // If 2: -45, -135?
+
+                        // Let's assume a "Seating Index" relative to me.
+                        const angleStep = 180 / (total + 1); // Simple distribution over 180 deg arch
+                        const angle = 180 + (angleStep * (i + 1)); // 180 is Left.
+
+                        // Convert to Radians (subtract 90 to orient correctly if using sin/cos standard)
+                        // Standard: 0 = Right, 270 = Top, 180 = Left.
+                        // We want 180 -> 270 -> 360.
+                        // Let's try: Start at 190 (Left-bottomish) end at 350 (Right-bottomish).
+
+                        // Radius: 40% of screen width/height check?
+                        // Using Viewport units (vmin) or percentage.
+                        const radiusX = 40; // % width
+                        const radiusY = 35; // % height
+
+                        // Math.cos takes radians.
+                        const rad = (angle * Math.PI) / 180;
+
+                        // x = 50 + r * cos(a)
+                        // y = 50 + r * sin(a)
+                        const left = 50 + (radiusX * Math.cos(rad));
+                        const top = 50 + (radiusY * Math.sin(rad));
+
+                        return (
+                            <div
+                                key={p.id}
+                                className="absolute flex flex-col items-center bg-black/40 p-2 rounded-lg backdrop-blur-sm pointer-events-auto min-w-[100px] transition-all duration-500"
+                                style={{
+                                    left: `${left}%`,
+                                    top: `${top}%`,
+                                    transform: `translate(-50%, -50%)`, // Center the element
+                                }}
+                            >
+                                <div className="relative mb-1">
+                                    <span className={`text-4xl font-bold ${gameState.currentTurn === p.id ? 'text-yellow-400 animate-pulse' : 'text-gray-400'}`}>
+                                        {p.username[0].toUpperCase()}
+                                    </span>
+                                    {p.rank > 0 && (
+                                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-black/90 text-[10px] px-1.5 rounded text-yellow-500 whitespace-nowrap border border-yellow-500/30">
+                                            {getRankName(p.rank)}
+                                        </div>
+                                    )}
+                                    {/* Card Count Badge */}
+                                    <div className="absolute -bottom-1 -right-4 bg-blue-600 text-white text-xs font-bold px-1.5 py-0.5 rounded-full shadow-md border border-blue-400 flex items-center gap-1">
+                                        <span>🃏</span>{p.cardCount || p.hand?.length || 0}
+                                    </div>
+                                    {p.taxDebt > 0 && <div className="absolute -bottom-2 -left-4 text-[10px] bg-red-600 px-1 rounded animate-bounce">TAX: {p.taxDebt}</div>}
+                                </div>
+                                <div className="text-xs text-gray-300 max-w-[80px] truncate">{p.username}</div>
+
+                                {/* Cards (Backs) - Stacked Effect */}
+                                <div className="relative h-6 w-12 mt-1">
+                                    {(isSpectator && !p.finished) ? (
+                                        (p.hand || []).map((card, idx) => (
+                                            <div key={idx} className="absolute left-1/2 -translate-x-1/2 origin-bottom scale-50" style={{ left: `${idx * 2}px` }}> {/* Simple overlap */}
+                                                <Card card={card} size="small" />
+                                            </div>
+                                        ))
+                                    ) : (
+                                        // Card Backs Fanned
+                                        Array.from({ length: Math.min(p.cardCount || (p.hand?.length) || 0, 5) }).map((_, idx) => (
+                                            <div
+                                                key={idx}
+                                                className="absolute w-4 h-6 bg-blue-900 rounded border border-white/20 shadow-sm"
+                                                style={{ left: `${(idx * 4)}px`, transform: `rotate(${(idx - 2) * 5}deg)` }}
+                                            />
+                                        ))
+                                    )}
+                                </div>
+                                {p.finished && <span className="text-green-400 font-bold mt-1 text-[10px]">FINISHED #{p.finishedRank}</span>}
+                                {!p.connected && (
+                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-600/90 text-white text-[10px] font-bold px-1 rounded border border-red-400 animate-pulse whitespace-nowrap z-50">
+                                        OFFLINE
                                     </div>
                                 )}
-                                {p.taxDebt > 0 && <div className="absolute -bottom-2 -right-4 text-xs bg-red-600 px-1 rounded animate-bounce">TAX: {p.taxDebt}</div>}
                             </div>
-                            <div className="text-sm text-gray-400 mt-1">{p.username}</div>
-                            {/* Cards (Backs) */}
-                            <div className="flex -space-x-8 mt-2">
-                                {(isSpectator && !p.finished) ? (
-                                    // Spectator sees cards
-                                    p.hand.map((card, idx) => (
-                                        <div key={idx} className="origin-bottom transition-transform hover:-translate-y-2" style={{ transform: `rotate(${(idx - p.hand.length / 2) * 5}deg)` }}>
-                                            <Card card={card} size="small" />
-                                        </div>
-                                    ))
-                                ) : (
-                                    // Normal players see backs
-                                    Array.from({ length: p.hand.length }).map((_, idx) => (
-                                        <div key={idx} className="w-8 h-12 bg-blue-900 rounded border border-white/20 shadow-md" style={{ transform: `translateY(${idx % 2 * 2}px)` }} />
-                                    ))
-                                )}
-                            </div>
-                            {p.finished && <span className="text-green-400 font-bold mt-1 text-xs">FINISHED #{p.finishedRank}</span>}
-                        </div>
-                    )
-                })}
+                        )
+                    })}
+                </div>
 
                 {/* CENTER PILE (Active Cards) */}
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 flex items-center justify-center z-10 pointer-events-none">

@@ -177,8 +177,20 @@ class RoomManager {
         if (!room) return;
         if (room.ownerId !== socket.id) return; // Only owner
 
+        // Validate Settings
+        // User Requirement: Timer must be 5s - 30s
+        const validSettings = { ...room.settings };
+
+        if (settings.timerDuration !== undefined) {
+            let val = parseInt(settings.timerDuration);
+            if (isNaN(val)) val = 30;
+            if (val < 5) val = 5;
+            if (val > 30) val = 30;
+            validSettings.timerDuration = val;
+        }
+
         // Update settings
-        room.settings = { ...room.settings, ...settings };
+        room.settings = validSettings;
         room.lastActivity = Date.now();
 
         this.io.to(roomId).emit('room_update', this.getRoomData(room));
@@ -262,6 +274,14 @@ class RoomManager {
 
     broadcastRoomList() {
         this.io.emit('room_list', this.getRoomListData());
+    }
+
+    handleDebugEndRound(socket) {
+        const roomId = socket.data.roomId;
+        const room = this.rooms.get(roomId);
+        if (room && room.game) {
+            room.game.debugEndRound();
+        }
     }
 }
 

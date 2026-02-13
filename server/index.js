@@ -44,6 +44,8 @@ io.on('connection', (socket) => {
     socket.on('market_pass', () => roomManager.handleMarketPass(socket));
     socket.on('select_seat_card', (cardId) => roomManager.handleSeatSelection(socket, cardId));
     socket.on('revolution_choice', (declare) => roomManager.handleRevolutionChoice(socket, declare));
+    socket.on('debug_end_round', () => roomManager.handleDebugEndRound(socket));
+    socket.on('update_settings', (settings) => roomManager.handleUpdateSettings(socket, settings));
 
     // Room List Request (e.g. on new connection or refresh)
     socket.on('request_room_list', () => {

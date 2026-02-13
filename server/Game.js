@@ -368,16 +368,24 @@ class Game {
         // Clear all debts first
         this.players.forEach(p => p.taxDebt = 0);
 
-        // Rule: Only Great Peon (Last) owes 2 cards to Great Dalmuti (Rank 1)
-        const dalmuti = this.players.find(p => p.rank === 1);
-        const peon = this.players.find(p => p.rank === this.players.length);
+        // Robustly find Dalmuti (Min Rank) and Peon (Max Rank)
+        // Filter out spectators or rank 0 if any
+        const rankedPlayers = this.players.filter(p => p.rank > 0);
+        if (rankedPlayers.length < 2) {
+            this.startMarketPhase();
+            return;
+        }
+
+        rankedPlayers.sort((a, b) => a.rank - b.rank);
+        const dalmuti = rankedPlayers[0];
+        const peon = rankedPlayers[rankedPlayers.length - 1];
 
         if (dalmuti && peon) {
-            console.log(`Taxation: ${peon.username} (Rank ${peon.rank}) owes 2 to ${dalmuti.username}`);
+            console.log(`Taxation: ${peon.username} (Rank ${peon.rank}) owes 2 to ${dalmuti.username} (Rank ${dalmuti.rank})`);
             peon.taxDebt = 2;
         } else {
             console.error("Critical: Dalmuti or Peon not found during taxation init");
-            this.startMarketPhase(); // Skip if invalid
+            this.startMarketPhase();
         }
     }
 
@@ -386,14 +394,15 @@ class Game {
         if (this.phase !== 'TAXATION') return;
         const player = this.players.find(p => p.id === playerId);
         if (!player || !player.taxDebt) return;
-        if (cardIds.length !== 2) return; // Strict 2 cards
+        if (cardIds.length !== 2) return;
 
         // Verify cards
         const cardsToGive = player.hand.filter(c => cardIds.includes(c.id));
         if (cardsToGive.length !== 2) return;
 
-        // Receiver is Rank 1
-        const receiver = this.players.find(p => p.rank === 1);
+        // Receiver is Dalmuti (Min Rank)
+        const rankedPlayers = this.players.filter(p => p.rank > 0).sort((a, b) => a.rank - b.rank);
+        const receiver = rankedPlayers[0];
         if (!receiver) return;
 
         // Transfer
@@ -415,15 +424,16 @@ class Game {
     handleTaxationReturn(playerId, cardIds) {
         if (this.phase !== 'TAXATION') return;
         const player = this.players.find(p => p.id === playerId);
-        if (!player || !player.taxDebt) return; // receiver.taxDebt was set to 2
+        if (!player || !player.taxDebt) return;
         if (cardIds.length !== 2) return;
 
         // Verify
         const cardsToReturn = player.hand.filter(c => cardIds.includes(c.id));
         if (cardsToReturn.length !== 2) return;
 
-        // Receiver is Rank N (Peon)
-        const peon = this.players.find(p => p.rank === this.players.length);
+        // Receiver is Peon (Max Rank)
+        const rankedPlayers = this.players.filter(p => p.rank > 0).sort((a, b) => a.rank - b.rank);
+        const peon = rankedPlayers[rankedPlayers.length - 1];
         if (!peon) return;
 
         // Transfer
@@ -756,16 +766,46 @@ class Game {
         this.phase = 'FINISHED'; // Game Over State
 
         // Finalize Ranks
+        // If debug/forced end, we might need to ensure ranks are set.
+        const unranked = this.players.filter(p => !p.finished);
+
+        // Assign ranks to those who haven't finished yet (based on hand size? or just random if forced?)
+        // Standard rule: If multiple people left, they rely on card count? 
+        // Dalmuti Standard: Game usually ends when 1 person left.
+
+        let currentRank = this.finishedPlayers.length + 1;
+        unranked.forEach(p => {
+            // If multiple, strictly we should play out. But for forced end:
+            p.finished = true;
+            p.rank = currentRank++;
+        });
+
         this.finishedPlayers.forEach((p, index) => {
             p.rank = index + 1;
         });
-        const loser = this.players.find(p => !p.finished);
-        if (loser) {
-            loser.rank = this.players.length;
-            // Also add to finished lists if needed logic
-        }
 
         this.broadcastState();
+
+        // Auto-start next round
+        console.log("Round Ended. Starting next round in 10s...");
+        setTimeout(() => {
+            this.startNextRound();
+        }, 10000);
+    }
+
+    debugEndRound() {
+        console.log("DEBUG: Forcing End of Round.");
+        // Randomly finish everyone to simulate a result
+        const shuffled = [...this.players];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+
+        this.finishedPlayers = shuffled;
+        this.finishedPlayers.forEach(p => p.finished = true);
+
+        this.endRound();
     }
 
     getPrimaryRank(cards) {
