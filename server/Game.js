@@ -12,6 +12,7 @@ class Game {
             if (!p.hand) p.hand = [];
             if (p.rank === undefined) p.rank = 0; // Or some default
             p.finished = false; // Reset finished state
+            p.connected = true; // Assume connected at start (Lobby users)
         });
 
         this.deck = [];
@@ -365,104 +366,123 @@ class Game {
     initTaxation() {
         console.log("Init Taxation. Players:", this.players.map(p => `${p.username}(${p.rank})`));
 
-        // Clear all debts first
+        // Clear all debts
         this.players.forEach(p => p.taxDebt = 0);
+        this.taxationMatches = []; // { debtorId, creditorId, amount, type: 'GIVE'|'RETURN' }
 
-        // Robustly find Dalmuti (Min Rank) and Peon (Max Rank)
-        // Filter out spectators or rank 0 if any
-        const rankedPlayers = this.players.filter(p => p.rank > 0);
+        // Find participants based on connected players (or all? Rules say Rank based. If offline, can we tax?)
+        // Let's use connected for setting up the initial contract.
+        const rankedPlayers = this.players.filter(p => p.rank > 0 && p.connected).sort((a, b) => a.rank - b.rank);
+
         if (rankedPlayers.length < 2) {
             this.startMarketPhase();
             return;
         }
 
-        rankedPlayers.sort((a, b) => a.rank - b.rank);
+        // 1. Great Dalmuti (1st) <-> Great Peon (Last)
         const dalmuti = rankedPlayers[0];
         const peon = rankedPlayers[rankedPlayers.length - 1];
 
-        if (dalmuti && peon) {
-            console.log(`Taxation: ${peon.username} (Rank ${peon.rank}) owes 2 to ${dalmuti.username} (Rank ${dalmuti.rank})`);
+        if (dalmuti && peon && dalmuti.id !== peon.id) {
+            console.log(`Taxation Match: ${peon.username} (Peon) -> ${dalmuti.username} (Dalmuti) [2 cards]`);
             peon.taxDebt = 2;
-        } else {
-            console.error("Critical: Dalmuti or Peon not found during taxation init");
+            this.taxationMatches.push({
+                debtorId: peon.id,
+                creditorId: dalmuti.id,
+                amount: 2,
+                type: 'GIVE'
+            });
+        }
+
+        // Future: Add Lesser Dalmuti logic here for >3 players
+
+        if (this.taxationMatches.length === 0) {
             this.startMarketPhase();
+        } else {
+            this.broadcastState();
         }
     }
 
-    // Peon pays tax manually (2 cards)
     handleTaxationPay(playerId, cardIds) {
         if (this.phase !== 'TAXATION') return;
+
+        // Find match
+        const matchIndex = this.taxationMatches.findIndex(m => m.debtorId === playerId && m.type === 'GIVE');
+        if (matchIndex === -1) return;
+        const match = this.taxationMatches[matchIndex];
+
         const player = this.players.find(p => p.id === playerId);
-        if (!player || !player.taxDebt) return;
-        if (cardIds.length !== 2) return;
+        const receiver = this.players.find(p => p.id === match.creditorId);
 
-        // Verify cards
+        if (!player || !receiver) return;
+        if (cardIds.length !== match.amount) return;
+
+        // Verify/Transfer
         const cardsToGive = player.hand.filter(c => cardIds.includes(c.id));
-        if (cardsToGive.length !== 2) return;
+        if (cardsToGive.length !== match.amount) return;
 
-        // Receiver is Dalmuti (Min Rank)
-        const rankedPlayers = this.players.filter(p => p.rank > 0).sort((a, b) => a.rank - b.rank);
-        const receiver = rankedPlayers[0];
-        if (!receiver) return;
-
-        // Transfer
         player.hand = player.hand.filter(c => !cardIds.includes(c.id));
         receiver.hand.push(...cardsToGive);
 
         player.hand.sort((a, b) => a.rank - b.rank);
         receiver.hand.sort((a, b) => a.rank - b.rank);
 
-        // Update Debts
-        player.taxDebt = 0; // Paid
-        receiver.taxDebt = 2; // Dalmuti now owes 2 cards back
+        // Update Debts & Match
+        player.taxDebt = 0;
+        receiver.taxDebt = match.amount; // Now receiver owes back
 
-        console.log(`Taxation Pay: ${player.username} paid 2 to ${receiver.username}. Now ${receiver.username} returns.`);
+        console.log(`Taxation Pay: ${player.username} paid ${match.amount} to ${receiver.username}.`);
+
+        // Update match to 'RETURN' phase
+        // Swap roles
+        match.debtorId = receiver.id;
+        match.creditorId = player.id;
+        match.type = 'RETURN';
+
         this.broadcastState();
     }
 
-    // Dalmuti returns cards (2 cards)
     handleTaxationReturn(playerId, cardIds) {
         if (this.phase !== 'TAXATION') return;
-        const player = this.players.find(p => p.id === playerId);
-        if (!player || !player.taxDebt) return;
-        if (cardIds.length !== 2) return;
 
-        // Verify
+        const matchIndex = this.taxationMatches.findIndex(m => m.debtorId === playerId && m.type === 'RETURN');
+        if (matchIndex === -1) return;
+        const match = this.taxationMatches[matchIndex];
+
+        const player = this.players.find(p => p.id === playerId); // Dalmuti
+        const receiver = this.players.find(p => p.id === match.creditorId); // Peon
+
+        if (!player || !receiver) return;
+        if (cardIds.length !== match.amount) return;
+
         const cardsToReturn = player.hand.filter(c => cardIds.includes(c.id));
-        if (cardsToReturn.length !== 2) return;
+        if (cardsToReturn.length !== match.amount) return;
 
-        // Receiver is Peon (Max Rank)
-        const rankedPlayers = this.players.filter(p => p.rank > 0).sort((a, b) => a.rank - b.rank);
-        const peon = rankedPlayers[rankedPlayers.length - 1];
-        if (!peon) return;
-
-        // Transfer
         player.hand = player.hand.filter(c => !cardIds.includes(c.id));
-        peon.hand.push(...cardsToReturn);
+        receiver.hand.push(...cardsToReturn);
 
         player.hand.sort((a, b) => a.rank - b.rank);
-        peon.hand.sort((a, b) => a.rank - b.rank);
+        receiver.hand.sort((a, b) => a.rank - b.rank);
 
-        player.taxDebt = 0; // Done
+        player.taxDebt = 0;
+        console.log(`Taxation Return: ${player.username} returned to ${receiver.username}.`);
 
-        // End Taxation -> Market
-        console.log(`Taxation Return: ${player.username} returned to ${peon.username}. Starting Market.`);
-        this.startMarketPhase();
+        // Match Complete
+        this.taxationMatches.splice(matchIndex, 1);
+
+        // Check if all matches done
+        if (this.taxationMatches.length === 0) {
+            this.startMarketPhase();
+        } else {
+            this.broadcastState();
+        }
     }
 
     setupHands() {
         this.players.forEach(p => {
             p.hand.sort((a, b) => a.rank - b.rank);
             p.finished = false;
-            p.connected = true;
-        });
-    }
-
-    setupHands() {
-        this.players.forEach(p => {
-            p.hand.sort((a, b) => a.rank - b.rank);
-            p.finished = false;
-            p.connected = true;
+            // Do not reset connection status here
         });
     }
 
@@ -580,9 +600,40 @@ class Game {
         const player = this.players.find(p => p.id === playerId);
         if (player) {
             player.connected = isConnected;
-            // If current turn player disconnected, maybe auto-pass immediately?
+            // If current turn player disconnected (PLAYING), auto-pass
             if (!isConnected && this.phase === 'PLAYING' && this.players[this.currentTurnIndex].id === playerId) {
                 this.handleAutoPass();
+            }
+            // If disconnected during SEAT_SELECTION, force random selection to unblock
+            else if (!isConnected && this.phase === 'SEAT_SELECTION') {
+                const isContestant = !this.contestants || this.contestants.find(p => p.id === playerId);
+                const alreadySelected = this.selectedSeats.find(s => s.playerId === playerId);
+
+                if (isContestant && !alreadySelected && this.seatDeck.length > 0) {
+                    console.log(`Auto-selecting seat for disconnected player: ${player.username}`);
+                    // Pick a random card from remaining seatDeck
+                    const randomCardIndex = Math.floor(Math.random() * this.seatDeck.length);
+                    const card = this.seatDeck[randomCardIndex];
+                    if (card) {
+                        this.handleSeatCardSelection(playerId, card.id);
+                    }
+                } else {
+                    this.broadcastState();
+                }
+            }
+            else if (!isConnected && this.phase === 'TAXATION') {
+                // If a player involved in tax disconnects, we should abort tax to avoid stuck state?
+                // Or just proceed? The problem is if they OWE cards and leave.
+                // Check if involved in active tax
+                const matches = this.taxationMatches || [];
+                const involved = matches.find(m => m.debtorId === playerId);
+
+                if (involved) {
+                    console.log(`Taxation participant ${player.username} disconnected. Aborting Taxation.`);
+                    this.startMarketPhase();
+                } else {
+                    this.broadcastState();
+                }
             } else {
                 this.broadcastState();
             }

@@ -129,6 +129,14 @@ class RoomManager {
                 if (room.status === 'PLAYING' && room.game) {
                     // Game in progress: Mark as disconnected
                     room.game.setPlayerConnectionStatus(socket.id, false);
+
+                    // Check if *everyone* disconnected from the game
+                    const remaining = room.game.players.filter(p => p.connected).length;
+                    if (remaining === 0) {
+                        console.log(`Room ${roomId} deleted (All players disconnected from game)`);
+                        this.rooms.delete(roomId);
+                        this.broadcastRoomList();
+                    }
                 } else {
                     // Lobby: Remove player
                     room.players = room.players.filter(p => p.id !== socket.id);

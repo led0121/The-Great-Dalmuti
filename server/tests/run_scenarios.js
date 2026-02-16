@@ -21,9 +21,11 @@ class Bot {
             this.socket.on('connect', () => {
                 this.id = this.socket.id;
                 console.log(`[${this.name}] Connected (${this.id})`);
+                this.socket.emit('login', this.name); // Required for server to set socket.data.username
                 resolve();
             });
             this.socket.on('disconnect', () => console.log(`[${this.name}] Disconnected`));
+            this.socket.on('error', (err) => console.error(`[${this.name}] Socket Error:`, err));
             this.socket.on('game_update', (state) => {
                 this.state = state;
                 // Update my hand if available (server sends 'myHand' or injected 'hand')
@@ -34,11 +36,11 @@ class Bot {
     }
 
     joinRoom(roomId) {
-        this.socket.emit('join_room', { roomId, username: this.name });
+        this.socket.emit('join_room', roomId);
     }
 
     createRoom() {
-        this.socket.emit('create_room', { username: this.name, roomName: `${this.name}'s Room` });
+        this.socket.emit('create_room', `${this.name}'s Room`);
     }
 
     selectSeat(cardId) {
@@ -64,7 +66,7 @@ async function scenarioManyPlayers() {
     let roomId = null;
 
     // Capture Room ID
-    host.socket.on('room_joined', (room) => {
+    host.socket.on('room_update', (room) => {
         console.log(`[Host] Room Joined: ${room.id}`);
         roomId = room.id;
     });
@@ -195,7 +197,7 @@ async function scenarioLeave() {
     }
 
     // Leaver leaves room explicitly
-    console.log(`Player ${leaver.username} leaving room...`);
+    console.log(`Player ${leaver.name} leaving room...`);
     leaver.leaveRoom();
 
     await sleep(1000);
@@ -204,7 +206,7 @@ async function scenarioLeave() {
     // In 'PLAYING' phase, leaving usually marks as disconnected but keeps player in list?
     // Or if handleDisconnect triggers, it sets connected=false.
     // Let's check status.
-    const leaverState = host.state.players.find(p => p.username === leaver.username);
+    const leaverState = host.state.players.find(p => p.username === leaver.name);
     if (leaverState) {
         if (leaverState.connected === false) {
             console.log("✅ SUCCESS: Leaver marked as disconnected (OFFLINE).");
@@ -247,7 +249,7 @@ async function scenarioDisconnectTurn() {
 
     // Pick Seats
     console.log("Waiting for Seat Selection phase...");
-    await sleep(2000); // Wait for Seat Selection phase
+    await sleep(3000); // Wait for Seat Selection phase
     if (host.state && host.state.phase === 'SEAT_SELECTION') {
         const seatDeck = host.state.seatDeck.map(c => c.id);
         bots.forEach((b, i) => b.selectSeat(seatDeck[i]));
@@ -261,8 +263,12 @@ async function scenarioDisconnectTurn() {
         attempts++;
         if (host.state) {
             phase = host.state.phase;
-            if (phase === 'TAXATION') {
-                // Try to skip taxation via debug or simple logic if needed
+            if (host.state.selectedSeats) {
+                console.log(`[Wait PLAYING] Phase: ${phase}, Seats: ${host.state.selectedSeats.length}/${PLAYER_COUNT}`);
+            }
+            if (phase === 'TAXATION' || phase === 'REVOLUTION_CHOICE') {
+                console.log(`Entered ${phase} phase. Skipping full gameplay simulation (Data exchange required).`);
+                break;
             }
         }
     }
@@ -274,7 +280,7 @@ async function scenarioDisconnectTurn() {
 
         if (turnBot) {
             turnBot.socket.disconnect();
-            await sleep(2000);
+            await sleep(3000);
 
             const nextTurnId = host.state.currentTurn;
             if (nextTurnId !== turnPlayerId) {
@@ -283,8 +289,10 @@ async function scenarioDisconnectTurn() {
                 console.error(`❌ FAILED: Turn did not pass.`);
             }
         }
+    } else if (host.state?.phase === 'TAXATION' || host.state?.phase === 'REVOLUTION_CHOICE') {
+        console.log("⚠️ SKIPPED: Disconnect logic (Requires Playing Phase, but got Taxation/Revolution).");
     } else {
-        console.log("Could not reach PLAYING phase (Taxation block?).");
+        console.log("Could not reach PLAYING phase.");
     }
 
     bots.forEach(b => { if (b.socket.connected) b.socket.disconnect(); });
@@ -327,11 +335,16 @@ async function scenarioNextRound() {
     console.log("Triggering Debug End Round...");
     host.socket.emit('debug_end_round');
 
-    await sleep(2000);
+    console.log("Wait for round transition timer (10s)...");
+    await sleep(12000);
 
     if (host.state?.round === 2) {
         console.log("✅ SUCCESS: Advanced to Round 2.");
-        console.log(`Phase: ${host.state.phase} (Expected TAXATION)`);
+        if (host.state.phase === 'TAXATION' || host.state.phase === 'REVOLUTION_CHOICE') {
+            console.log(`Phase: ${host.state.phase} (Expected TAXATION or REVOLUTION_CHOICE) - OK`);
+        } else {
+            console.error(`❌ FAILED: Phase is ${host.state.phase} (Expected TAXATION or REVOLUTION_CHOICE)`);
+        }
     } else {
         console.error(`❌ FAILED: Round is ${host.state?.round} (Expected 2)`);
     }

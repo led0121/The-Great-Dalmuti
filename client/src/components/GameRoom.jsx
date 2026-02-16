@@ -530,7 +530,7 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                 </div>
 
                 {/* PLAYER HAND AREA */}
-                <div className="absolute bottom-0 w-full flex flex-col items-center pb-4 z-50 pointer-events-auto">
+                <div className="absolute bottom-4 left-4 z-50 pointer-events-auto">
                     {/* Controls */}
                     <div className="mb-4 h-12 flex gap-4">
                         {isMyTurn && myPlayer && !myPlayer.finished && gameState.phase === 'PLAYING' && (
@@ -553,26 +553,34 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                     </div>
 
                     {/* Hand */}
-                    <div className="flex items-end justify-center -space-x-12 hover:-space-x-8 transition-all p-4">
-                        <AnimatePresence>
-                            {myPlayer?.hand.map(card => {
-                                const playable = isCardPlayable(card);
-                                const selected = selectedCards.includes(card.id);
-                                return (
-                                    <motion.div
-                                        layoutId={`card-${card.id}`}
-                                        key={card.id}
-                                        className={`relative transition-all duration-200 
-                                    ${!playable && !card.isJoker ? 'brightness-50 grayscale cursor-not-allowed' : 'cursor-pointer hover:-translate-y-6 hover:z-50'} 
-                                        ${selected ? '-translate-y-10 z-40 ring-4 ring-green-500 rounded-lg' : ''}
-                                    `}
-                                        onClick={() => handleCardClick(card.id)}
-                                    >
-                                        <Card card={card} isPlayable={true} />
-                                    </motion.div>
-                                )
-                            })}
-                        </AnimatePresence>
+                    {/* Card Count Label - Top Left of First Card? Or separate? */}
+                    <div className="relative">
+                        <div className="absolute -top-6 left-0 bg-blue-600 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-md border border-blue-400 z-50">
+                            You have {myPlayer?.hand.length} cards
+                        </div>
+                        <div className="flex items-end justify-start -space-x-12 p-4 overflow-x-auto max-w-[80vw] scrollbar-hide"
+                            style={{ paddingBottom: '20px' }}> {/* Removed hover:-space-x-8 */}
+                            <AnimatePresence>
+                                {myPlayer?.hand.map((card, index) => {
+                                    const playable = isCardPlayable(card);
+                                    const selected = selectedCards.includes(card.id);
+                                    return (
+                                        <motion.div
+                                            layoutId={`card-${card.id}`}
+                                            key={card.id}
+                                            className={`relative transition-all duration-200 flex-shrink-0
+                                        ${!playable && !card.isJoker ? 'brightness-50 grayscale cursor-not-allowed' : 'cursor-pointer hover:-translate-y-6 hover:z-50'} 
+                                            ${selected ? '-translate-y-10 z-40 ring-4 ring-green-500 rounded-lg' : ''}
+                                        `}
+                                            onClick={() => handleCardClick(card.id)}
+                                            style={{ zIndex: index }}
+                                        >
+                                            <Card card={card} isPlayable={true} />
+                                        </motion.div>
+                                    )
+                                })}
+                            </AnimatePresence>
+                        </div>
                     </div>
                 </div>
             </div>
