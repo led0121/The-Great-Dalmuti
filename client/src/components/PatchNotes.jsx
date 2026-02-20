@@ -2,6 +2,16 @@ import React from 'react';
 
 const PATCH_NOTES = [
     {
+        version: "v1.9.0",
+        date: "2026-02-19",
+        changes: [
+            "새로운 게임 모드 3종 추가: 무정부 상태(세금 없음), 조커의 반란(무작위 랭크 조커), 블라인드(상대 패 수 비공개).",
+            "게임 모드 UI 개선: 각 모드의 한글 이름과 상세 설명 툴팁을 추가하여 더욱 직관적으로 변경했습니다.",
+            "모드 공개 연출 강화: 게임 시작 시 화려한 애니메이션과 함께 적용된 모드를 안내합니다.",
+            "버그 수정 및 안정성 개선: 모드 적용 로직을 서버에서 검증하도록 강화했습니다."
+        ]
+    },
+    {
         version: "v1.8.0",
         date: "2026-02-16",
         changes: [
@@ -82,25 +92,36 @@ const PATCH_NOTES = [
 
 export default function PatchNotes() {
     return (
-        <div className="bg-gray-800 p-6 rounded-lg shadow-xl border border-gray-700 h-full overflow-y-auto max-h-[600px]">
-            <h2 className="text-xl font-bold mb-4 text-purple-300 border-b border-gray-600 pb-2">📜 Patch Notes</h2>
-            <div className="space-y-6">
+        <div className="backdrop-blur-lg bg-slate-900/60 p-6 rounded-3xl shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] border border-slate-700/50 h-full flex flex-col relative overflow-hidden">
+            <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] bg-purple-500/10 rounded-full mix-blend-screen filter blur-[80px] pointer-events-none"></div>
+
+            <h2 className="text-xl font-extrabold mb-4 pb-4 border-b border-slate-700/50 relative z-10 flex items-center gap-2">
+                <span>📜</span>
+                <span className="bg-gradient-to-r from-purple-400 to-pink-500 text-transparent bg-clip-text tracking-tight">Patch Notes</span>
+            </h2>
+
+            <div className="flex-1 overflow-y-auto space-y-6 pr-2 custom-scrollbar relative z-10 relative">
                 {PATCH_NOTES.map((note, index) => (
-                    <div key={index} className="text-sm">
-                        <div className="flex justify-between items-baseline mb-2">
-                            <span className="font-bold text-white text-lg">{note.version}</span>
-                            <span className="text-gray-400 text-xs">{note.date}</span>
+                    <div key={index} className="text-sm bg-slate-800/30 p-4 rounded-2xl border border-slate-700/30 hover:bg-slate-800/50 hover:border-slate-600/50 transition-all duration-300">
+                        <div className="flex justify-between items-center mb-3">
+                            <span className="font-bold text-slate-100 text-lg bg-slate-900/50 px-2 py-0.5 rounded-md shadow-inner">
+                                {note.version}
+                            </span>
+                            <span className="text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded-md text-xs font-semibold border border-purple-500/20">
+                                {note.date}
+                            </span>
                         </div>
-                        <ul className="list-disc list-inside space-y-1 text-gray-300">
+                        <ul className="list-disc list-outside ml-4 space-y-1.5 text-slate-300/90 marker:text-purple-400">
                             {note.changes.map((change, i) => (
-                                <li key={i}>{change}</li>
+                                <li key={i} className="leading-snug">{change}</li>
                             ))}
                         </ul>
                     </div>
                 ))}
             </div>
-            <div className="mt-4 text-xs text-gray-500 text-center">
-                Dev Note: Update PATCH_NOTES in PatchNotes.jsx
+
+            <div className="mt-4 pt-3 border-t border-slate-700/50 text-xs text-slate-500 text-center font-medium relative z-10">
+                Latest Updates & Details
             </div>
         </div>
     );

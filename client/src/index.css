@@ -3,9 +3,12 @@
 @tailwind utilities;
 
 body {
-    background-color: #1a1a1a;
-    color: #ffffff;
-    font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  background-color: #020617;
+  /* Slate 950 */
+  color: #f8fafc;
+  /* Slate 50 */
+  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  overflow-x: hidden;
 }
 
 .bg-card-pattern {
@@ -13,4 +16,47 @@ body {
   background-image: repeating-linear-gradient(45deg, #172554 25%, transparent 25%, transparent 75%, #172554 75%, #172554), repeating-linear-gradient(45deg, #172554 25%, #1e3a8a 25%, #1e3a8a 75%, #172554 75%, #172554);
   background-position: 0 0, 10px 10px;
   background-size: 20px 20px;
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.8);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 1);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* Base Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
 }

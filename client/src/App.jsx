@@ -111,18 +111,23 @@ function AppContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white font-sans flex flex-col items-center justify-center p-4 relative">
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col items-center justify-center p-4 relative overflow-x-hidden selection:bg-amber-500/30 selection:text-amber-200">
+      {/* Background Decor - Modern Gradient Orbs */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-amber-600/20 rounded-full mix-blend-screen filter blur-[120px] animate-pulse pointer-events-none"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-600/20 rounded-full mix-blend-screen filter blur-[120px] animate-pulse pointer-events-none" style={{ animationDelay: '2s' }}></div>
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none mix-blend-overlay"></div>
+
       {/* Language Toggle */}
-      <div className="absolute top-4 right-4 z-50 flex gap-2">
+      <div className="absolute top-6 right-6 z-50 flex gap-2">
         <button
           onClick={() => setLanguage('ko')}
-          className={`px-3 py-1 rounded border ${language === 'ko' ? 'bg-amber-500 border-amber-500' : 'bg-transparent border-gray-500 text-gray-400'}`}
+          className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-300 ${language === 'ko' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.2)]' : 'bg-slate-800/50 text-slate-400 border border-slate-700 hover:border-slate-500 hover:text-slate-200'}`}
         >
           한국어
         </button>
         <button
           onClick={() => setLanguage('en')}
-          className={`px-3 py-1 rounded border ${language === 'en' ? 'bg-blue-500 border-blue-500' : 'bg-transparent border-gray-500 text-gray-400'}`}
+          className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-300 ${language === 'en' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.2)]' : 'bg-slate-800/50 text-slate-400 border border-slate-700 hover:border-slate-500 hover:text-slate-200'}`}
         >
           ENG
         </button>
@@ -135,27 +140,33 @@ function AppContent() {
       )}
 
       {!username ? (
-        <Login onLogin={handleLogin} />
+        <div className="w-full max-w-md relative z-10">
+          <Login onLogin={handleLogin} />
+        </div>
       ) : !currentRoom ? (
-        <Lobby
-          username={username}
-          roomList={roomList}
-          onCreateRoom={handleCreateRoom}
-          onJoinRoom={handleJoinRoom}
-          onRefreshList={() => socket.emit('request_room_list')}
-        />
+        <div className="w-full max-w-7xl relative z-10">
+          <Lobby
+            username={username}
+            roomList={roomList}
+            onCreateRoom={handleCreateRoom}
+            onJoinRoom={handleJoinRoom}
+            onRefreshList={() => socket.emit('request_room_list')}
+          />
+        </div>
       ) : (
-        <GameRoom
-          socket={socket}
-          room={currentRoom}
-          gameState={gameState}
-          username={username}
-          onStartGame={handleStartGame}
-          onPlay={handlePlayCards}
-          onPass={handlePass}
-          onUpdateSettings={handleUpdateSettings}
-          onLeave={handleLeaveRoom}
-        />
+        <div className="w-full relative z-10">
+          <GameRoom
+            socket={socket}
+            room={currentRoom}
+            gameState={gameState}
+            username={username}
+            onStartGame={handleStartGame}
+            onPlay={handlePlayCards}
+            onPass={handlePass}
+            onUpdateSettings={handleUpdateSettings}
+            onLeave={handleLeaveRoom}
+          />
+        </div>
       )}
     </div>
   )

@@ -34,7 +34,8 @@ class RoomManager {
             ownerId: socket.id,
             status: 'LOBBY',
             settings: {
-                timerDuration: 30 // Default
+                timerDuration: 30, // Default
+                gameMode: 'random' // 'random' | 'none' | 'revolution' | 'shuffle' | 'inverted'
             },
             lastActivity: Date.now()
         };
@@ -197,9 +198,20 @@ class RoomManager {
             validSettings.timerDuration = val;
         }
 
+        if (settings.gameMode !== undefined) {
+            const validModes = ['random', 'none', 'revolution', 'shuffle', 'inverted', 'anarchy', 'joker', 'blind'];
+            if (validModes.includes(settings.gameMode)) {
+                validSettings.gameMode = settings.gameMode;
+            }
+        }
+
         // Update settings
         room.settings = validSettings;
         room.lastActivity = Date.now();
+
+        if (room.game) {
+            room.game.updateSettings(validSettings);
+        }
 
         this.io.to(roomId).emit('room_update', this.getRoomData(room));
     }

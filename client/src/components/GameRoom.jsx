@@ -203,6 +203,58 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                                 {t('turnTimerLabel')}: <span className="text-white font-bold">{settings.timerDuration}s</span>
                             </div>
                         )}
+
+                        {/* Game Mode Selector */}
+                        <div className="mt-4 border-t border-gray-600 pt-4">
+                            <div className="flex items-center justify-center gap-2 mb-2">
+                                <h3 className="text-sm font-bold text-gray-300 uppercase tracking-wider">게임 모드</h3>
+                                <div className="group relative">
+                                    <span className="cursor-help text-gray-400 hover:text-white transition-colors">?</span>
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-gray-900 border border-gray-600 text-xs text-gray-300 p-3 rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                                        <div className="font-bold text-amber-400 mb-1">
+                                            {(!settings.gameMode || settings.gameMode === 'random') && "무작위 모드: 매 라운드 무작위 규칙이 적용됩니다."}
+                                            {settings.gameMode === 'none' && "기본 모드: 특수 규칙 없는 정통 달무티입니다."}
+                                            {settings.gameMode === 'revolution' && "혁명이다: 1등과 꼴등의 패가 바뀝니다."}
+                                            {settings.gameMode === 'shuffle' && "어느순간: 게임 중 무작위 시점에 모든 플레이어의 패가 회전합니다."}
+                                            {settings.gameMode === 'inverted' && "뒤바뀐 신분제: 계급 서열이 뒤집힙니다 (12가 1을 이김)."}
+                                            {settings.gameMode === 'anarchy' && "무정부 상태: 세금 징수가 사라집니다. 오직 실력과 운으로 승부하세요!"}
+                                            {settings.gameMode === 'joker' && "조커의 반란: 무작위 숫자 하나가 조커(와일드카드)가 됩니다."}
+                                            {settings.gameMode === 'blind' && "블라인드: 상대방의 남은 카드 장수가 보이지 않습니다."}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {isOwner ? (
+                                <select
+                                    value={settings.gameMode || 'random'}
+                                    onChange={(e) => onUpdateSettings && onUpdateSettings({ ...settings, gameMode: e.target.value })}
+                                    className="bg-gray-900 border border-gray-600 rounded px-3 py-1 text-white focus:border-amber-500 outline-none w-full max-w-[200px]"
+                                >
+                                    <option value="random">🎲 무작위</option>
+                                    <option value="none">🚫 기본</option>
+                                    <option value="revolution">🔥 혁명이다</option>
+                                    <option value="shuffle">🔀 어느순간</option>
+                                    <option value="inverted">🙃 뒤바뀐 신분제</option>
+                                    <option value="anarchy">🏴 무정부 상태</option>
+                                    <option value="joker">🃏 조커의 반란</option>
+                                    <option value="blind">🕶️ 블라인드</option>
+                                </select>
+                            ) : (
+                                <div className="text-gray-400 text-sm">
+                                    현재 모드: <span className="text-amber-400 font-bold uppercase">
+                                        {(!settings.gameMode || settings.gameMode === 'random') && "무작위"}
+                                        {settings.gameMode === 'none' && "기본"}
+                                        {settings.gameMode === 'revolution' && "혁명이다"}
+                                        {settings.gameMode === 'shuffle' && "어느순간"}
+                                        {settings.gameMode === 'inverted' && "뒤바뀐 신분제"}
+                                        {settings.gameMode === 'anarchy' && "무정부 상태"}
+                                        {settings.gameMode === 'joker' && "조커의 반란"}
+                                        {settings.gameMode === 'blind' && "블라인드"}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     <div className="mb-8">
@@ -458,6 +510,87 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                         <div className="text-gray-600 font-bold text-xl opacity-50">{t('tableEmpty')}</div>
                     )}
                 </div>
+
+                {/* MODE REVEAL OVERLAY */}
+                <AnimatePresence>
+                    {gameState.phase === 'MODE_REVEAL' && (
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 1.1 }}
+                            className="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-black/80 backdrop-blur-md"
+                        >
+                            <h2 className="text-4xl font-black text-white mb-8 tracking-widest uppercase">
+                                Mode Reveal
+                            </h2>
+
+                            {!gameState.activeMode ? (
+                                <motion.div
+                                    initial={{ y: 20, opacity: 0 }}
+                                    animate={{ y: 0, opacity: 1 }}
+                                    transition={{ delay: 0.5 }}
+                                    className="text-6xl font-bold text-gray-400"
+                                >
+                                    Standard Game
+                                </motion.div>
+                            ) : (
+                                <motion.div
+                                    initial={{ scale: 0, rotate: -10 }}
+                                    animate={{ scale: 1.5, rotate: 0 }}
+                                    transition={{ type: 'spring', bounce: 0.5, delay: 0.5 }}
+                                    className="flex flex-col items-center"
+                                >
+                                    <div className="text-7xl mb-4">
+                                        {gameState.activeMode === 'revolution' && '🔥'}
+                                        {gameState.activeMode === 'shuffle' && '🔀'}
+                                        {gameState.activeMode === 'inverted' && '🙃'}
+                                        {gameState.activeMode === 'anarchy' && '🏴'}
+                                        {gameState.activeMode === 'joker' && '🃏'}
+                                        {gameState.activeMode === 'blind' && '🕶️'}
+                                    </div>
+                                    <div className="text-5xl font-black text-amber-500 uppercase drop-shadow-[0_0_15px_rgba(245,158,11,0.5)]">
+                                        {gameState.activeMode === 'revolution' && "Running Revolution"}
+                                        {gameState.activeMode === 'shuffle' && "Random Shuffle"}
+                                        {gameState.activeMode === 'inverted' && "Inverted Hierarchy"}
+                                        {gameState.activeMode === 'anarchy' && "Total Anarchy"}
+                                        {gameState.activeMode === 'joker' && "Joker's Day"}
+                                        {gameState.activeMode === 'blind' && "Blindfolded"}
+                                    </div>
+                                    <div className="text-xl text-white mt-4 max-w-lg text-center font-bold bg-gray-800/50 p-4 rounded-xl border border-gray-600">
+                                        {gameState.activeMode === 'revolution' && "The Great Dalmuti and Great Peon swap hands!"}
+                                        {gameState.activeMode === 'shuffle' && "At a random moment, all hands will be rotated!"}
+                                        {gameState.activeMode === 'inverted' && "Ranks are flipped! 12 is the highest, 1 is the lowest."}
+                                        {gameState.activeMode === 'anarchy' && "No Taxes! No Ranks! Pure Chaos!"}
+                                        {gameState.activeMode === 'joker' && `It's Joker's Day! Rank ${gameState.extraJokerRank} is now a Wildcard!`}
+                                        {gameState.activeMode === 'blind' && "Trust No One! Opponent hand counts are hidden."}
+                                    </div>
+                                </motion.div>
+                            )}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* ACTIVE MODE BADGE */}
+                {gameState.activeMode && gameState.phase !== 'MODE_REVEAL' && (
+                    <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-amber-600/90 text-white px-4 py-1 rounded-full text-sm font-bold shadow-lg z-40 border border-amber-400 flex items-center gap-2 animate-pulse">
+                        <span>
+                            {gameState.activeMode === 'revolution' && '🔥'}
+                            {gameState.activeMode === 'shuffle' && '🔀'}
+                            {gameState.activeMode === 'inverted' && '🙃'}
+                            {gameState.activeMode === 'anarchy' && '🏴'}
+                            {gameState.activeMode === 'joker' && '🃏'}
+                            {gameState.activeMode === 'blind' && '🕶️'}
+                        </span>
+                        <span className="uppercase tracking-wider">
+                            {gameState.activeMode === 'revolution' && "Running Revolution"}
+                            {gameState.activeMode === 'shuffle' && "Random Shuffle"}
+                            {gameState.activeMode === 'inverted' && "Inverted Hierarchy"}
+                            {gameState.activeMode === 'anarchy' && "Total Anarchy"}
+                            {gameState.activeMode === 'joker' && "Joker's Day"}
+                            {gameState.activeMode === 'blind' && "Blindfolded"}
+                        </span>
+                    </div>
+                )}
 
                 {/* Phase Overlay (Taxation/Market) */}
                 {(gameState.phase === 'TAXATION' || gameState.phase === 'MARKET') && (
