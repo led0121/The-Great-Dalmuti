@@ -183,6 +183,44 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                     <h2 className="text-3xl font-bold mb-4 text-amber-400">{room.name}</h2>
                     <div className="text-gray-300 mb-6 font-mono bg-gray-900 p-2 rounded inline-block">ID: <span className="text-white select-all">{room.id}</span></div>
 
+                    {/* Game Type Selection */}
+                    <div className="mb-6 bg-gray-700/50 p-4 rounded-lg">
+                        <h3 className="text-sm font-bold text-gray-300 mb-3 uppercase tracking-wider">
+                            {t('selectGame')}
+                        </h3>
+                        {isOwner ? (
+                            <div className="flex justify-center gap-3">
+                                <button
+                                    onClick={() => onUpdateSettings && onUpdateSettings({ gameType: 'dalmuti' })}
+                                    className={`px-6 py-3 rounded-lg font-bold transition-all border-2 ${(settings.gameType || 'dalmuti') === 'dalmuti'
+                                        ? 'bg-amber-500 border-amber-400 text-white shadow-lg shadow-amber-500/30 scale-105'
+                                        : 'bg-gray-800 border-gray-600 text-gray-400 hover:border-amber-500/50'
+                                        }`}
+                                >
+                                    👑 {t('appTitle') || '달무티'}
+                                </button>
+                                <button
+                                    onClick={() => onUpdateSettings && onUpdateSettings({ gameType: 'onecard' })}
+                                    className={`px-6 py-3 rounded-lg font-bold transition-all border-2 ${settings.gameType === 'onecard'
+                                        ? 'bg-emerald-500 border-emerald-400 text-white shadow-lg shadow-emerald-500/30 scale-105'
+                                        : 'bg-gray-800 border-gray-600 text-gray-400 hover:border-emerald-500/50'
+                                        }`}
+                                >
+                                    🃏 원카드
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="text-center">
+                                <span className={`inline-block px-4 py-2 rounded-lg font-bold ${settings.gameType === 'onecard'
+                                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                    : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                    }`}>
+                                    {settings.gameType === 'onecard' ? '🃏 원카드' : `👑 ${t('appTitle') || '달무티'}`}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+
                     {/* Settings Section */}
                     <div className="mb-6 bg-gray-700/50 p-4 rounded-lg">
                         <h3 className="text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">{t('gameSettings')}</h3>

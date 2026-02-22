@@ -35,7 +35,7 @@ io.on('connection', (socket) => {
     socket.on('pass_turn', () => roomManager.handlePass(socket));
     socket.on('chat_message', (msg) => roomManager.handleChat(socket, msg));
 
-    // Advanced Phases
+    // Advanced Phases (Dalmuti)
     socket.on('restart_game', () => roomManager.handleRestartGame(socket));
     socket.on('taxation_return', (cardIds) => roomManager.handleTaxationReturn(socket, cardIds));
     socket.on('taxation_pay', (cardIds) => roomManager.handleTaxationPay(socket, cardIds));
@@ -46,6 +46,10 @@ io.on('connection', (socket) => {
     socket.on('revolution_choice', (declare) => roomManager.handleRevolutionChoice(socket, declare));
     socket.on('debug_end_round', () => roomManager.handleDebugEndRound(socket));
     socket.on('update_settings', (settings) => roomManager.handleUpdateSettings(socket, settings));
+
+    // OneCard specific events
+    socket.on('draw_card', () => roomManager.handleDrawCard(socket));
+    socket.on('choose_suit', (suit) => roomManager.handleChooseSuit(socket, suit));
 
     // Room List Request (e.g. on new connection or refresh)
     socket.on('request_room_list', () => {

@@ -82,6 +82,10 @@ export default function Lobby({ username, roomList, onCreateRoom, onJoinRoom, on
                                             }`}>
                                             {room.status === 'LOBBY' ? t('statusLobby') : t('statusPlaying')}
                                         </span>
+                                        <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${room.gameType === 'onecard' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'
+                                            }`}>
+                                            {room.gameType === 'onecard' ? '🃏 원카드' : '👑 달무티'}
+                                        </span>
                                         <span className="text-xs text-gray-300 bg-black/30 px-2 py-0.5 rounded">{t('players', { count: room.playerCount })}</span>
                                     </div>
                                 </div>

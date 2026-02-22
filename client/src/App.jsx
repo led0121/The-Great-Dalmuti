@@ -3,6 +3,7 @@ import io from 'socket.io-client'
 import Login from './components/Login'
 import Lobby from './components/Lobby'
 import GameRoom from './components/GameRoom'
+import OneCardRoom from './components/OneCardRoom'
 import { LanguageProvider, useLanguage } from './LanguageContext'
 
 // Initialize socket with dynamic host for LAN support
@@ -19,9 +20,6 @@ function AppContent() {
   const [currentRoom, setCurrentRoom] = useState(null) // Room data
   const [gameState, setGameState] = useState(null) // Game data
   const [error, setError] = useState(null)
-
-  // Login Handler needs to be defined here or prop passed down?
-  // Handler logic is independent of language basically, but error messages might need t()
 
   useEffect(() => {
     socket.connect()
@@ -110,6 +108,42 @@ function AppContent() {
     socket.emit('leave_room');
   }
 
+  // Determine which game room component to show
+  const getGameRoomComponent = () => {
+    const gameType = currentRoom?.settings?.gameType || 'dalmuti';
+
+    // If game is in LOBBY, show the appropriate lobby based on game type
+    // If game state reports onecard type, show OneCardRoom
+    if (gameType === 'onecard' || gameState?.gameType === 'onecard') {
+      return (
+        <OneCardRoom
+          socket={socket}
+          room={currentRoom}
+          gameState={gameState}
+          username={username}
+          onStartGame={handleStartGame}
+          onLeave={handleLeaveRoom}
+          onUpdateSettings={handleUpdateSettings}
+        />
+      )
+    }
+
+    // Default: Dalmuti
+    return (
+      <GameRoom
+        socket={socket}
+        room={currentRoom}
+        gameState={gameState}
+        username={username}
+        onStartGame={handleStartGame}
+        onPlay={handlePlayCards}
+        onPass={handlePass}
+        onUpdateSettings={handleUpdateSettings}
+        onLeave={handleLeaveRoom}
+      />
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans flex flex-col items-center justify-center p-4 relative">
       {/* Language Toggle */}
@@ -145,17 +179,7 @@ function AppContent() {
           onRefreshList={() => socket.emit('request_room_list')}
         />
       ) : (
-        <GameRoom
-          socket={socket}
-          room={currentRoom}
-          gameState={gameState}
-          username={username}
-          onStartGame={handleStartGame}
-          onPlay={handlePlayCards}
-          onPass={handlePass}
-          onUpdateSettings={handleUpdateSettings}
-          onLeave={handleLeaveRoom}
-        />
+        getGameRoomComponent()
       )}
     </div>
   )

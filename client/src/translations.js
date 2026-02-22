@@ -87,6 +87,25 @@ export const translations = {
         revolutionNo: "조용히 넘어가기",
         revolutionDesc: "혁명을 선포하면 조커 2장을 버리고 최고 계급과 최하 계급이 뒤바뀝니다! (세금 면제)",
         revolutionWaiting: "누군가 혁명을 고민하고 있습니다...",
+
+        // OneCard
+        selectGame: "게임 선택",
+        onecard: "원카드",
+        dalmuti: "달무티",
+        attackCardDecks: "공격카드 덱 수",
+        sameNumberPlay: "같은 숫자 한번에 내기",
+        drawCard: "뽑기",
+        chooseSuit: "무늬를 선택하세요!",
+        choosingSuit: "무늬 선택 중...",
+        playAgain: "다시 하기",
+        gameFinished: "게임 종료!",
+        wins: "승리!",
+        cards: "{count}장",
+        takeCards: "받기",
+        suitHearts: "하트",
+        suitDiamonds: "다이아",
+        suitClubs: "클로버",
+        suitSpades: "스페이드",
     },
     en: {
         // App / Common
@@ -180,5 +199,24 @@ export const translations = {
         revolutionNo: "Stay Quiet",
         revolutionDesc: "Declaring Revolution discards 2 Jokers and swaps the highest and lowest ranks! (No Tax)",
         revolutionWaiting: "Someone is considering a Revolution...",
+
+        // OneCard
+        selectGame: "Select Game",
+        onecard: "One Card",
+        dalmuti: "Dalmuti",
+        attackCardDecks: "Attack Card Decks",
+        sameNumberPlay: "Play Same Number",
+        drawCard: "Draw",
+        chooseSuit: "Choose a Suit!",
+        choosingSuit: "Choosing suit...",
+        playAgain: "Play Again",
+        gameFinished: "GAME OVER!",
+        wins: "Wins!",
+        cards: "{count} Cards",
+        takeCards: "Take",
+        suitHearts: "Hearts",
+        suitDiamonds: "Diamonds",
+        suitClubs: "Clubs",
+        suitSpades: "Spades",
     }
 }

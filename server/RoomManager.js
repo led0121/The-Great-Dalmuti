@@ -1,5 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const Game = require('./Game');
+const OneCardGame = require('./OneCardGame');
 
 class RoomManager {
     constructor(io) {
@@ -34,7 +35,17 @@ class RoomManager {
             ownerId: socket.id,
             status: 'LOBBY',
             settings: {
-                timerDuration: 30 // Default
+                gameType: 'dalmuti', // 'dalmuti' or 'onecard'
+                timerDuration: 30, // Default
+                // OneCard specific settings
+                attackCardCount: 1, // Number of decks (1-3)
+                sameNumberPlay: false, // Allow playing same number cards at once
+                attackCards: {
+                    two: true,       // 2 (+2 attack)
+                    ace: true,       // A (+3 attack)
+                    blackJoker: true, // Black Joker (+5 attack)
+                    colorJoker: true  // Color Joker (+7 attack)
+                }
             },
             lastActivity: Date.now()
         };
@@ -50,9 +61,6 @@ class RoomManager {
             return;
         }
 
-        // Allow joining if Lobby OR Playing (Spectator/Waiting)
-        // Original check: if (room.status !== 'LOBBY') ...
-
         socket.join(roomId);
         socket.data.roomId = roomId;
 
@@ -66,16 +74,12 @@ class RoomManager {
             this.broadcastRoomList();
         } else {
             // Determine if Spectator or Waiting
-            // Add to waiting list in Game
             if (room.game) {
                 room.game.addWaitingPlayer({
                     id: socket.id,
                     username: socket.data.username
                 });
-                // Send room details to the joining user so they switch to GameRoom view
                 socket.emit('room_update', this.getRoomData(room));
-
-                // Send current game state to this specific user instantly
                 room.game.broadcastState();
             }
         }
@@ -87,7 +91,7 @@ class RoomManager {
         if (!room) return;
         if (room.ownerId !== socket.id) return; // Only owner
 
-        if (room.players.length < 2) { // Constraint lowered for testing (User request implies testing issues)
+        if (room.players.length < 2) {
             socket.emit('error', 'Need at least 2 players to start');
             return;
         }
@@ -95,29 +99,72 @@ class RoomManager {
         room.status = 'PLAYING';
         room.lastActivity = Date.now();
 
-        room.game = new Game(room.players, (gameState) => {
-            this.io.to(roomId).emit('game_update', gameState);
-        }, room.settings); // Pass settings!
+        const gameType = room.settings.gameType || 'dalmuti';
 
-        room.game.start();
+        if (gameType === 'onecard') {
+            room.game = new OneCardGame(room.players, (gameState) => {
+                this.io.to(roomId).emit('game_update', gameState);
+            }, room.settings);
+            room.game.start();
+        } else {
+            // Default: Dalmuti
+            room.game = new Game(room.players, (gameState) => {
+                this.io.to(roomId).emit('game_update', gameState);
+            }, room.settings);
+            room.game.start();
+        }
 
         this.io.to(roomId).emit('room_update', this.getRoomData(room));
         this.broadcastRoomList();
     }
 
-    handlePlay(socket, { cards }) {
+    handlePlay(socket, { cards, chosenSuit }) {
         const room = this.rooms.get(socket.data.roomId);
         if (room && room.game) {
             room.lastActivity = Date.now();
-            const success = room.game.playCards(socket.id, cards);
-            if (!success) socket.emit('error', 'Invalid move');
+            const gameType = room.settings.gameType || 'dalmuti';
+
+            if (gameType === 'onecard') {
+                const success = room.game.playCards(socket.id, cards, chosenSuit);
+                if (!success) socket.emit('error', 'Invalid move');
+            } else {
+                const success = room.game.playCards(socket.id, cards);
+                if (!success) socket.emit('error', 'Invalid move');
+            }
         }
     }
 
     handlePass(socket) {
         const room = this.rooms.get(socket.data.roomId);
         if (room && room.game) {
-            room.game.passTurn(socket.id);
+            const gameType = room.settings.gameType || 'dalmuti';
+            if (gameType === 'dalmuti') {
+                room.game.passTurn(socket.id);
+            }
+            // OneCard doesn't have pass - only draw
+        }
+    }
+
+    handleDrawCard(socket) {
+        const room = this.rooms.get(socket.data.roomId);
+        if (room && room.game) {
+            const gameType = room.settings.gameType || 'dalmuti';
+            if (gameType === 'onecard') {
+                room.lastActivity = Date.now();
+                const success = room.game.drawCards(socket.id);
+                if (!success) socket.emit('error', 'Cannot draw now');
+            }
+        }
+    }
+
+    handleChooseSuit(socket, suit) {
+        const room = this.rooms.get(socket.data.roomId);
+        if (room && room.game) {
+            const gameType = room.settings.gameType || 'dalmuti';
+            if (gameType === 'onecard') {
+                room.lastActivity = Date.now();
+                room.game.playCards(socket.id, [], suit);
+            }
         }
     }
 
@@ -165,7 +212,16 @@ class RoomManager {
         const roomId = socket.data.roomId;
         const room = this.rooms.get(roomId);
         if (room && room.ownerId === socket.id && room.game) {
-            room.game.startNextRound();
+            const gameType = room.settings.gameType || 'dalmuti';
+            if (gameType === 'onecard') {
+                // Restart OneCard game
+                room.game = new OneCardGame(room.players, (gameState) => {
+                    this.io.to(roomId).emit('game_update', gameState);
+                }, room.settings);
+                room.game.start();
+            } else {
+                room.game.startNextRound();
+            }
         }
     }
 
@@ -174,7 +230,7 @@ class RoomManager {
         const room = this.rooms.get(roomId);
         if (room) room.lastActivity = Date.now();
 
-        if (room && room.game) {
+        if (room && room.game && room.game.handleTaxationReturn) {
             room.game.handleTaxationReturn(socket.id, cardIds);
         }
     }
@@ -186,7 +242,6 @@ class RoomManager {
         if (room.ownerId !== socket.id) return; // Only owner
 
         // Validate Settings
-        // User Requirement: Timer must be 5s - 30s
         const validSettings = { ...room.settings };
 
         if (settings.timerDuration !== undefined) {
@@ -195,6 +250,36 @@ class RoomManager {
             if (val < 5) val = 5;
             if (val > 30) val = 30;
             validSettings.timerDuration = val;
+        }
+
+        if (settings.gameType !== undefined) {
+            if (['dalmuti', 'onecard'].includes(settings.gameType)) {
+                validSettings.gameType = settings.gameType;
+            }
+        }
+
+        if (settings.attackCardCount !== undefined) {
+            let val = parseInt(settings.attackCardCount);
+            if (isNaN(val)) val = 1;
+            if (val < 1) val = 1;
+            if (val > 3) val = 3;
+            validSettings.attackCardCount = val;
+        }
+
+        if (settings.sameNumberPlay !== undefined) {
+            validSettings.sameNumberPlay = !!settings.sameNumberPlay;
+        }
+
+        // Validate attack card toggles
+        if (settings.attackCards !== undefined && typeof settings.attackCards === 'object') {
+            if (!validSettings.attackCards) {
+                validSettings.attackCards = { two: true, ace: true, blackJoker: true, colorJoker: true };
+            }
+            const ac = settings.attackCards;
+            if (ac.two !== undefined) validSettings.attackCards.two = !!ac.two;
+            if (ac.ace !== undefined) validSettings.attackCards.ace = !!ac.ace;
+            if (ac.blackJoker !== undefined) validSettings.attackCards.blackJoker = !!ac.blackJoker;
+            if (ac.colorJoker !== undefined) validSettings.attackCards.colorJoker = !!ac.colorJoker;
         }
 
         // Update settings
@@ -208,21 +293,19 @@ class RoomManager {
         const roomId = socket.data.roomId;
         if (!roomId) return;
 
-        // Use existing disconnect logic but don't disconnect socket entirely
         this.handleDisconnect(socket);
 
         // Clean up socket data
         socket.leave(roomId);
         delete socket.data.roomId;
 
-        // Send them to lobby list?
         socket.emit('left_room');
     }
 
     handleTaxationPay(socket, cardIds) {
         const roomId = socket.data.roomId;
         const room = this.rooms.get(roomId);
-        if (room && room.game) {
+        if (room && room.game && room.game.handleTaxationPay) {
             room.game.handleTaxationPay(socket.id, cardIds);
         }
     }
@@ -230,7 +313,7 @@ class RoomManager {
     handleRevolutionChoice(socket, declare) {
         const roomId = socket.data.roomId;
         const room = this.rooms.get(roomId);
-        if (room && room.game) {
+        if (room && room.game && room.game.handleRevolutionChoice) {
             room.game.handleRevolutionChoice(socket.id, declare);
         }
     }
@@ -238,15 +321,15 @@ class RoomManager {
     handleMarketTrade(socket, cardId) {
         const roomId = socket.data.roomId;
         const room = this.rooms.get(roomId);
-        if (room && room.game) {
-            room.game.handleMarketTrade(socket.id, cardId); // Assumes single card trade per request
+        if (room && room.game && room.game.handleMarketTrade) {
+            room.game.handleMarketTrade(socket.id, cardId);
         }
     }
 
     handleMarketPass(socket) {
         const roomId = socket.data.roomId;
         const room = this.rooms.get(roomId);
-        if (room && room.game) {
+        if (room && room.game && room.game.handleMarketPass) {
             room.game.handleMarketPass(socket.id);
         }
     }
@@ -254,7 +337,7 @@ class RoomManager {
     handleSeatSelection(socket) {
         const roomId = socket.data.roomId;
         const room = this.rooms.get(roomId);
-        if (room && room.game) {
+        if (room && room.game && room.game.handleSeatCardSelection) {
             room.game.handleSeatCardSelection(socket.id);
         }
     }
@@ -276,7 +359,8 @@ class RoomManager {
             id: r.id,
             name: r.name,
             playerCount: r.players.length,
-            status: r.status
+            status: r.status,
+            gameType: r.settings.gameType || 'dalmuti'
         }));
     }
 
@@ -287,7 +371,7 @@ class RoomManager {
     handleDebugEndRound(socket) {
         const roomId = socket.data.roomId;
         const room = this.rooms.get(roomId);
-        if (room && room.game) {
+        if (room && room.game && room.game.debugEndRound) {
             room.game.debugEndRound();
         }
     }
