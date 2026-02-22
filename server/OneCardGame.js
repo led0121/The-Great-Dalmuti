@@ -36,19 +36,40 @@ class OneCardGame {
         this.onUpdate = onUpdate;
 
         // Merge attackCards with defaults carefully
-        const defaultAttackCards = { two: true, ace: true, blackJoker: true, colorJoker: true };
+        // Each attack card has { enabled: boolean, power: number }
+        const defaultAttackCards = {
+            two: { enabled: true, power: 2 },
+            ace: { enabled: true, power: 3 },
+            blackJoker: { enabled: true, power: 5 },
+            colorJoker: { enabled: true, power: 7 }
+        };
         const incomingAttackCards = options.attackCards || {};
+
+        // Merge each attack card setting
+        const mergedAttackCards = {};
+        for (const key of Object.keys(defaultAttackCards)) {
+            const incoming = incomingAttackCards[key];
+            const def = defaultAttackCards[key];
+            if (incoming && typeof incoming === 'object') {
+                mergedAttackCards[key] = {
+                    enabled: incoming.enabled !== undefined ? !!incoming.enabled : def.enabled,
+                    power: (typeof incoming.power === 'number' && incoming.power >= 1 && incoming.power <= 20) ? incoming.power : def.power,
+                };
+            } else if (typeof incoming === 'boolean') {
+                // Backward compatibility: boolean → { enabled, power: default }
+                mergedAttackCards[key] = { enabled: incoming, power: def.power };
+            } else {
+                mergedAttackCards[key] = { ...def };
+            }
+        }
 
         this.options = {
             attackCardCount: options.attackCardCount || 1,
             sameNumberPlay: options.sameNumberPlay !== undefined ? options.sameNumberPlay : false,
             timerDuration: options.timerDuration || 30,
-            attackCards: {
-                two: incomingAttackCards.two !== undefined ? incomingAttackCards.two : defaultAttackCards.two,
-                ace: incomingAttackCards.ace !== undefined ? incomingAttackCards.ace : defaultAttackCards.ace,
-                blackJoker: incomingAttackCards.blackJoker !== undefined ? incomingAttackCards.blackJoker : defaultAttackCards.blackJoker,
-                colorJoker: incomingAttackCards.colorJoker !== undefined ? incomingAttackCards.colorJoker : defaultAttackCards.colorJoker,
-            }
+            maxCards: parseInt(options.maxCards) || 0, // 0 = no limit, >0 = eliminated when reaching this count
+            oneCardPenalty: 2, // Cards drawn when caught not calling
+            attackCards: mergedAttackCards
         };
 
         this.deck = [];
@@ -68,12 +89,18 @@ class OneCardGame {
 
         this.lastAction = null; // { playerId, action: 'play'|'draw'|'pass', cards: [] }
         this.waitingPlayers = [];
+
+        // One Card calling mechanic
+        this.oneCardTarget = null;   // Player ID who has 1 card and hasn't called yet
+        this.oneCardCalled = false;  // Whether the target has called
+        this.oneCardTimer = null;    // Timer for auto-penalty
     }
 
     start() {
         this.initDeck();
         this.shuffleDeck();
-        this.dealCards(7); // 7 cards each
+        const handSize = Math.min(7, Math.floor(this.deck.length / this.players.length) - 1);
+        this.dealCards(Math.max(1, handSize)); // Adaptive hand size
 
         // Place first card on discard pile (must not be special)
         let firstCard = this.deck.pop();
@@ -111,7 +138,7 @@ class OneCardGame {
             }
 
             // Add Black Joker if enabled
-            if (this.options.attackCards.blackJoker) {
+            if (this.options.attackCards.blackJoker?.enabled) {
                 this.deck.push({
                     id: `bj-${d}`,
                     suit: null,
@@ -123,7 +150,7 @@ class OneCardGame {
             }
 
             // Add Color Joker if enabled
-            if (this.options.attackCards.colorJoker) {
+            if (this.options.attackCards.colorJoker?.enabled) {
                 this.deck.push({
                     id: `cj-${d}`,
                     suit: null,
@@ -179,21 +206,22 @@ class OneCardGame {
      */
     isAttackCard(card) {
         const ac = this.options.attackCards;
-        if (card.rank === '2' && ac.two) return true;
-        if (card.rank === 'A' && ac.ace) return true;
-        if (card.rank === 'BJ' && ac.blackJoker) return true;
-        if (card.rank === 'CJ' && ac.colorJoker) return true;
+        if (card.rank === '2' && ac.two?.enabled) return true;
+        if (card.rank === 'A' && ac.ace?.enabled) return true;
+        if (card.rank === 'BJ' && ac.blackJoker?.enabled) return true;
+        if (card.rank === 'CJ' && ac.colorJoker?.enabled) return true;
         return false;
     }
 
     /**
-     * Get the attack value for a card
+     * Get the attack value for a card (reads from configurable power)
      */
     getAttackValue(card) {
-        if (card.rank === '2') return 2;
-        if (card.rank === 'A') return 3;
-        if (card.rank === 'BJ') return 5;
-        if (card.rank === 'CJ') return 7;
+        const ac = this.options.attackCards;
+        if (card.rank === '2') return ac.two?.power || 2;
+        if (card.rank === 'A') return ac.ace?.power || 3;
+        if (card.rank === 'BJ') return ac.blackJoker?.power || 5;
+        if (card.rank === 'CJ') return ac.colorJoker?.power || 7;
         return 0;
     }
 
@@ -355,10 +383,14 @@ class OneCardGame {
             this.direction *= -1;
         }
 
-        // Check win
+        // Check win (0 cards)
         if (player.hand.length === 0) {
             player.finished = true;
             this.finishedPlayers.push(player);
+            // Clear oneCard if this player was target
+            if (this.oneCardTarget === playerId) {
+                this.clearOneCardWindow();
+            }
 
             const activePlayers = this.players.filter(p => !p.finished);
             if (activePlayers.length <= 1) {
@@ -369,6 +401,11 @@ class OneCardGame {
                 this.endGame();
                 return true;
             }
+        }
+
+        // Check one card call (1 card left, not finished)
+        if (player.hand.length === 1 && !player.finished) {
+            this.startOneCardWindow(playerId);
         }
 
         // Handle 7 - choose suit
@@ -424,6 +461,9 @@ class OneCardGame {
         this.sortHand(player);
         this.lastAction = { playerId, action: 'draw', cards: [] };
 
+        // Check max cards elimination
+        this.checkMaxCards(player);
+
         this.advanceTurnIndex();
         this.startTurnTimer();
         this.broadcastState();
@@ -478,9 +518,136 @@ class OneCardGame {
 
     endGame() {
         this.stopTurnTimer();
+        this.clearOneCardWindow();
         this.phase = 'FINISHED';
         this.winner = this.finishedPlayers[0]?.id || null;
         this.broadcastState();
+    }
+
+    // === ONE CARD CALLING MECHANIC ===
+
+    /**
+     * Start the one card window when a player goes to 1 card
+     */
+    startOneCardWindow(playerId) {
+        this.clearOneCardWindow();
+        this.oneCardTarget = playerId;
+        this.oneCardCalled = false;
+
+        // 5-second window to call
+        this.oneCardTimer = setTimeout(() => {
+            if (this.oneCardTarget && !this.oneCardCalled) {
+                // Auto-penalize: target didn't call in time
+                this.penalizeOneCardTarget();
+            }
+        }, 5000);
+    }
+
+    /**
+     * Clear the one card window
+     */
+    clearOneCardWindow() {
+        if (this.oneCardTimer) {
+            clearTimeout(this.oneCardTimer);
+            this.oneCardTimer = null;
+        }
+        this.oneCardTarget = null;
+        this.oneCardCalled = false;
+    }
+
+    /**
+     * Penalize the one card target (draw penalty cards)
+     */
+    penalizeOneCardTarget() {
+        const target = this.players.find(p => p.id === this.oneCardTarget);
+        if (target && !target.finished) {
+            const penalty = this.options.oneCardPenalty || 2;
+            for (let i = 0; i < penalty; i++) {
+                this.ensureDeckHasCards();
+                if (this.deck.length > 0) {
+                    target.hand.push(this.deck.pop());
+                }
+            }
+            this.sortHand(target);
+            this.checkMaxCards(target);
+        }
+        this.oneCardTarget = null;
+        this.oneCardCalled = false;
+        this.oneCardTimer = null;
+        this.broadcastState();
+    }
+
+    /**
+     * Handle a player calling "One Card!"
+     * - If valid target exists and not called yet:
+     *   - Target calls → safe
+     *   - Others call → target penalized (caught!)
+     * - If no valid target → false call, presser draws 1 card
+     */
+    callOneCard(playerId) {
+        if (this.phase === 'FINISHED') return { success: false };
+
+        // Active one card window
+        if (this.oneCardTarget && !this.oneCardCalled) {
+            if (playerId === this.oneCardTarget) {
+                // Target called it - SAFE!
+                this.oneCardCalled = true;
+                this.clearOneCardWindow();
+                this.lastAction = { playerId, action: 'onecard_safe', cards: [] };
+                this.broadcastState();
+                return { success: true, type: 'safe' };
+            } else {
+                // Someone caught the target!
+                this.penalizeOneCardTarget();
+                this.lastAction = { playerId, action: 'onecard_catch', cards: [] };
+                this.broadcastState();
+                return { success: true, type: 'caught' };
+            }
+        } else {
+            // No valid target - false call penalty
+            const presser = this.players.find(p => p.id === playerId);
+            if (presser && !presser.finished) {
+                this.ensureDeckHasCards();
+                if (this.deck.length > 0) {
+                    presser.hand.push(this.deck.pop());
+                }
+                this.sortHand(presser);
+                this.checkMaxCards(presser);
+            }
+            this.lastAction = { playerId, action: 'onecard_false', cards: [] };
+            this.broadcastState();
+            return { success: true, type: 'false_call' };
+        }
+    }
+
+    // === MAX CARDS ELIMINATION ===
+
+    /**
+     * Check if a player has exceeded max cards and should be eliminated
+     */
+    checkMaxCards(player) {
+        if (this.options.maxCards <= 0) return;
+        if (player.finished) return;
+        if (player.hand.length >= this.options.maxCards) {
+            player.finished = true;
+            player.eliminated = true;
+            this.finishedPlayers.push(player);
+
+            // Check if game should end
+            const activePlayers = this.players.filter(p => !p.finished);
+            if (activePlayers.length <= 1) {
+                if (activePlayers.length === 1) {
+                    // Last remaining player is the winner - add to front
+                    const winner = activePlayers[0];
+                    winner.finished = true;
+                    this.finishedPlayers.unshift(winner);
+                }
+                this.endGame();
+            } else if (this.players[this.currentTurnIndex]?.id === player.id) {
+                // If eliminated player was current turn, advance
+                this.advanceTurnIndex();
+            }
+        }
     }
 
     setPlayerConnectionStatus(playerId, isConnected) {
@@ -522,15 +689,20 @@ class OneCardGame {
             timeLeft: this.timeLeft,
             winner: this.winner,
             lastAction: this.lastAction,
+            // One Card state
+            oneCardTarget: this.oneCardTarget,
+            oneCardCalled: this.oneCardCalled,
             options: {
                 sameNumberPlay: this.options.sameNumberPlay,
                 attackCardCount: this.options.attackCardCount,
-                attackCards: this.options.attackCards
+                attackCards: this.options.attackCards,
+                maxCards: this.options.maxCards
             },
             finishedPlayers: this.finishedPlayers.map((p, i) => ({
                 id: p.id,
                 username: p.username,
-                rank: i + 1
+                rank: i + 1,
+                eliminated: !!p.eliminated
             })),
             players: this.players.map(p => ({
                 id: p.id,
@@ -538,7 +710,8 @@ class OneCardGame {
                 cardCount: p.hand ? p.hand.length : 0,
                 finished: p.finished,
                 connected: p.connected,
-                hand: p.hand // Include hand (prototype approach)
+                eliminated: !!p.eliminated,
+                hand: p.hand
             })),
             waitingPlayers: this.waitingPlayers.map(p => ({
                 id: p.id,

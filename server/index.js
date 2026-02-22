@@ -50,6 +50,7 @@ io.on('connection', (socket) => {
     // OneCard specific events
     socket.on('draw_card', () => roomManager.handleDrawCard(socket));
     socket.on('choose_suit', (suit) => roomManager.handleChooseSuit(socket, suit));
+    socket.on('call_onecard', () => roomManager.handleCallOneCard(socket));
 
     // Room List Request (e.g. on new connection or refresh)
     socket.on('request_room_list', () => {

@@ -40,11 +40,12 @@ class RoomManager {
                 // OneCard specific settings
                 attackCardCount: 1, // Number of decks (1-3)
                 sameNumberPlay: false, // Allow playing same number cards at once
+                maxCards: 0, // 0 = no limit, >0 = eliminated at this hand size
                 attackCards: {
-                    two: true,       // 2 (+2 attack)
-                    ace: true,       // A (+3 attack)
-                    blackJoker: true, // Black Joker (+5 attack)
-                    colorJoker: true  // Color Joker (+7 attack)
+                    two: { enabled: true, power: 2 },
+                    ace: { enabled: true, power: 3 },
+                    blackJoker: { enabled: true, power: 5 },
+                    colorJoker: { enabled: true, power: 7 }
                 }
             },
             lastActivity: Date.now()
@@ -235,6 +236,15 @@ class RoomManager {
         }
     }
 
+    handleCallOneCard(socket) {
+        const roomId = socket.data.roomId;
+        const room = this.rooms.get(roomId);
+        if (!room || !room.game) return;
+        if (room.settings.gameType !== 'onecard') return;
+        room.lastActivity = Date.now();
+        room.game.callOneCard(socket.id);
+    }
+
     handleUpdateSettings(socket, settings) {
         const roomId = socket.data.roomId;
         const room = this.rooms.get(roomId);
@@ -270,16 +280,40 @@ class RoomManager {
             validSettings.sameNumberPlay = !!settings.sameNumberPlay;
         }
 
-        // Validate attack card toggles
+        if (settings.maxCards !== undefined) {
+            let val = parseInt(settings.maxCards);
+            if (isNaN(val) || val < 0) val = 0;
+            if (val > 50) val = 50;
+            validSettings.maxCards = val;
+        }
+
+        // Validate attack card settings (enabled + power)
         if (settings.attackCards !== undefined && typeof settings.attackCards === 'object') {
             if (!validSettings.attackCards) {
-                validSettings.attackCards = { two: true, ace: true, blackJoker: true, colorJoker: true };
+                validSettings.attackCards = {
+                    two: { enabled: true, power: 2 },
+                    ace: { enabled: true, power: 3 },
+                    blackJoker: { enabled: true, power: 5 },
+                    colorJoker: { enabled: true, power: 7 }
+                };
             }
             const ac = settings.attackCards;
-            if (ac.two !== undefined) validSettings.attackCards.two = !!ac.two;
-            if (ac.ace !== undefined) validSettings.attackCards.ace = !!ac.ace;
-            if (ac.blackJoker !== undefined) validSettings.attackCards.blackJoker = !!ac.blackJoker;
-            if (ac.colorJoker !== undefined) validSettings.attackCards.colorJoker = !!ac.colorJoker;
+            for (const key of ['two', 'ace', 'blackJoker', 'colorJoker']) {
+                if (ac[key] !== undefined && typeof ac[key] === 'object') {
+                    if (!validSettings.attackCards[key]) {
+                        validSettings.attackCards[key] = { enabled: true, power: 2 };
+                    }
+                    if (ac[key].enabled !== undefined) {
+                        validSettings.attackCards[key].enabled = !!ac[key].enabled;
+                    }
+                    if (ac[key].power !== undefined) {
+                        let p = parseInt(ac[key].power);
+                        if (isNaN(p) || p < 1) p = 1;
+                        if (p > 20) p = 20;
+                        validSettings.attackCards[key].power = p;
+                    }
+                }
+            }
         }
 
         // Update settings

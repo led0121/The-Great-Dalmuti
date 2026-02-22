@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import Chat from './Chat'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useLanguage } from '../LanguageContext'
@@ -11,10 +11,10 @@ const SUIT_NAMES_EN = { hearts: 'Hearts', diamonds: 'Diamonds', clubs: 'Clubs', 
 
 // Attack card info for display
 const ATTACK_CARDS_INFO = {
-    two: { label_ko: '2', label_en: '2', value: '+2', color: 'blue' },
-    ace: { label_ko: 'A', label_en: 'A', value: '+3', color: 'red' },
-    blackJoker: { label_ko: '흑백 조커', label_en: 'B.Joker', value: '+5', color: 'gray' },
-    colorJoker: { label_ko: '컬러 조커', label_en: 'C.Joker', value: '+7', color: 'purple' },
+    two: { label_ko: '2', label_en: '2', defaultPower: 2, color: 'blue' },
+    ace: { label_ko: 'A', label_en: 'A', defaultPower: 3, color: 'red' },
+    blackJoker: { label_ko: '흑백 조커', label_en: 'B.Joker', defaultPower: 5, color: 'gray' },
+    colorJoker: { label_ko: '컬러 조커', label_en: 'C.Joker', defaultPower: 7, color: 'purple' },
 }
 
 function PlayingCard({ card, isSelected, onClick, isPlayable = true, size = 'normal', faceDown = false }) {
@@ -81,7 +81,7 @@ function PlayingCard({ card, isSelected, onClick, isPlayable = true, size = 'nor
     const symbolSize = size === 'small' ? 'text-lg' : size === 'tiny' ? 'text-sm' : 'text-3xl'
 
     // Determine if this card is a special/attack card
-    const attackLabels = { 'A': '+3', '2': '+2' }
+    const attackLabels = { 'A': 'ATK', '2': 'ATK' }
     const specialLabels = { 'J': 'SKIP', 'Q': 'REV', '7': 'SUIT', '3': '🛡' }
     const badge = attackLabels[card.rank] || specialLabels[card.rank] || null
     const isAttackType = ['A', '2'].includes(card.rank)
@@ -127,29 +127,60 @@ function PlayingCard({ card, isSelected, onClick, isPlayable = true, size = 'nor
     )
 }
 
-// Attack card toggle component
-function AttackCardToggle({ cardKey, info, enabled, onChange, language }) {
+// Attack card toggle + power component
+function AttackCardSetting({ cardKey, info, cardSetting, onUpdate, language }) {
+    const enabled = cardSetting?.enabled !== false
+    const power = cardSetting?.power || info.defaultPower
+
     const colorMap = {
-        blue: { on: 'bg-blue-500 border-blue-400', off: 'bg-gray-700 border-gray-600', text: 'text-blue-400' },
-        red: { on: 'bg-red-500 border-red-400', off: 'bg-gray-700 border-gray-600', text: 'text-red-400' },
-        gray: { on: 'bg-gray-500 border-gray-400', off: 'bg-gray-700 border-gray-600', text: 'text-gray-300' },
-        purple: { on: 'bg-purple-500 border-purple-400', off: 'bg-gray-700 border-gray-600', text: 'text-purple-400' },
+        blue: { on: 'bg-blue-500/20 border-blue-500', off: 'bg-gray-800 border-gray-700', accent: 'bg-blue-500' },
+        red: { on: 'bg-red-500/20 border-red-500', off: 'bg-gray-800 border-gray-700', accent: 'bg-red-500' },
+        gray: { on: 'bg-gray-500/20 border-gray-400', off: 'bg-gray-800 border-gray-700', accent: 'bg-gray-500' },
+        purple: { on: 'bg-purple-500/20 border-purple-500', off: 'bg-gray-800 border-gray-700', accent: 'bg-purple-500' },
     }
     const colors = colorMap[info.color] || colorMap.blue
 
     return (
-        <button
-            onClick={() => onChange(!enabled)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition-all ${enabled ? `${colors.on} text-white shadow-lg` : `${colors.off} text-gray-500`
-                }`}
-        >
-            <span className="font-bold text-sm">{language === 'ko' ? info.label_ko : info.label_en}</span>
-            <span className={`text-xs font-mono ${enabled ? 'text-white/80' : 'text-gray-600'}`}>{info.value}</span>
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${enabled ? 'bg-white/20' : 'bg-gray-800'
+        <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 transition-all ${enabled ? colors.on : colors.off
+            }`}>
+            {/* Toggle */}
+            <button
+                onClick={() => onUpdate({ ...cardSetting, enabled: !enabled })}
+                className={`relative w-10 h-5 rounded-full transition-all flex-shrink-0 ${enabled ? colors.accent : 'bg-gray-600'
+                    }`}
+            >
+                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${enabled ? 'left-5' : 'left-0.5'
+                    }`} />
+            </button>
+
+            {/* Card Label */}
+            <span className={`font-bold text-sm min-w-[60px] ${enabled ? 'text-white' : 'text-gray-500'
                 }`}>
-                {enabled ? 'ON' : 'OFF'}
+                {language === 'ko' ? info.label_ko : info.label_en}
             </span>
-        </button>
+
+            {/* Power Adjuster */}
+            <div className="flex items-center gap-1 ml-auto">
+                <button
+                    onClick={() => power > 1 && onUpdate({ ...cardSetting, enabled, power: power - 1 })}
+                    disabled={!enabled || power <= 1}
+                    className="w-6 h-6 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed text-white text-xs font-bold flex items-center justify-center transition-colors"
+                >
+                    −
+                </button>
+                <span className={`font-mono font-bold text-sm w-8 text-center ${enabled ? 'text-yellow-400' : 'text-gray-600'
+                    }`}>
+                    +{power}
+                </span>
+                <button
+                    onClick={() => power < 20 && onUpdate({ ...cardSetting, enabled, power: power + 1 })}
+                    disabled={!enabled || power >= 20}
+                    className="w-6 h-6 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed text-white text-xs font-bold flex items-center justify-center transition-colors"
+                >
+                    +
+                </button>
+            </div>
+        </div>
     )
 }
 
@@ -157,21 +188,52 @@ export default function OneCardRoom({ socket, room, gameState, username, onStart
     const [selectedCards, setSelectedCards] = useState([])
     const { t, language } = useLanguage()
     const suitNames = language === 'ko' ? SUIT_NAMES_KO : SUIT_NAMES_EN
+    const [oneCardToast, setOneCardToast] = useState(null)
 
     const isOwner = room.ownerId === socket.id
     const myPlayer = gameState?.players?.find(p => p.id === socket.id)
     const isMyTurn = gameState?.currentTurn === socket.id
     const topCard = gameState?.topCard
 
+    // Random position for oneCard button (regenerate when target changes)
+    const oneCardBtnPos = useMemo(() => ({
+        x: Math.random() * 60 - 30, // -30% to +30%
+        y: Math.random() * 40 - 20, // -20% to +20%
+    }), [gameState?.oneCardTarget])
+
     // Reset selection on turn change
     useEffect(() => {
         setSelectedCards([])
     }, [gameState?.currentTurn, gameState?.phase])
 
+    // OneCard action feedback
+    useEffect(() => {
+        const action = gameState?.lastAction
+        if (!action) return
+        if (action.action === 'onecard_safe') {
+            const p = gameState.players?.find(pl => pl.id === action.playerId)
+            setOneCardToast({ type: 'safe', name: p?.username || '?' })
+            setTimeout(() => setOneCardToast(null), 2000)
+        } else if (action.action === 'onecard_catch') {
+            const catcher = gameState.players?.find(pl => pl.id === action.playerId)
+            setOneCardToast({ type: 'catch', name: catcher?.username || '?' })
+            setTimeout(() => setOneCardToast(null), 2500)
+        } else if (action.action === 'onecard_false') {
+            const p = gameState.players?.find(pl => pl.id === action.playerId)
+            setOneCardToast({ type: 'false', name: p?.username || '?' })
+            setTimeout(() => setOneCardToast(null), 2000)
+        }
+    }, [gameState?.lastAction])
+
     // --- LOBBY VIEW ---
     if (room.status === 'LOBBY') {
         const settings = room.settings || {};
-        const attackCards = settings.attackCards || { two: true, ace: true, blackJoker: true, colorJoker: true };
+        const attackCards = settings.attackCards || {
+            two: { enabled: true, power: 2 },
+            ace: { enabled: true, power: 3 },
+            blackJoker: { enabled: true, power: 5 },
+            colorJoker: { enabled: true, power: 7 }
+        };
 
         return (
             <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-900 via-emerald-950 to-gray-900 p-4">
@@ -196,8 +258,8 @@ export default function OneCardRoom({ socket, room, gameState, username, onStart
                                 <button
                                     onClick={() => onUpdateSettings({ gameType: 'dalmuti' })}
                                     className={`px-6 py-2 rounded-lg font-bold transition-all border-2 ${settings.gameType !== 'onecard'
-                                            ? 'bg-amber-500 border-amber-400 text-white shadow-lg shadow-amber-500/30'
-                                            : 'bg-gray-800 border-gray-600 text-gray-400 hover:border-amber-500/50'
+                                        ? 'bg-amber-500 border-amber-400 text-white shadow-lg shadow-amber-500/30'
+                                        : 'bg-gray-800 border-gray-600 text-gray-400 hover:border-amber-500/50'
                                         }`}
                                 >
                                     👑 {t('dalmuti')}
@@ -205,8 +267,8 @@ export default function OneCardRoom({ socket, room, gameState, username, onStart
                                 <button
                                     onClick={() => onUpdateSettings({ gameType: 'onecard' })}
                                     className={`px-6 py-2 rounded-lg font-bold transition-all border-2 ${settings.gameType === 'onecard'
-                                            ? 'bg-emerald-500 border-emerald-400 text-white shadow-lg shadow-emerald-500/30'
-                                            : 'bg-gray-800 border-gray-600 text-gray-400 hover:border-emerald-500/50'
+                                        ? 'bg-emerald-500 border-emerald-400 text-white shadow-lg shadow-emerald-500/30'
+                                        : 'bg-gray-800 border-gray-600 text-gray-400 hover:border-emerald-500/50'
                                         }`}
                                 >
                                     🃏 {t('onecard')}
@@ -253,8 +315,8 @@ export default function OneCardRoom({ socket, room, gameState, username, onStart
                                                 key={n}
                                                 onClick={() => onUpdateSettings({ attackCardCount: n })}
                                                 className={`w-10 h-10 rounded-lg font-bold transition-all ${(settings.attackCardCount || 1) === n
-                                                        ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                                                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                                                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                                                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
                                                     }`}
                                             >
                                                 {n}
@@ -262,6 +324,35 @@ export default function OneCardRoom({ socket, room, gameState, username, onStart
                                         ))}
                                     </div>
                                 </div>
+
+                                {/* Max Cards (Elimination) */}
+                                <div className="flex items-center justify-between">
+                                    <label className="text-sm text-gray-300">
+                                        {language === 'ko' ? '최대 카드 수 (탈락)' : 'Max Cards (Elimination)'}
+                                    </label>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => onUpdateSettings({ maxCards: Math.max(0, (settings.maxCards || 0) - 5) })}
+                                            disabled={(settings.maxCards || 0) <= 0}
+                                            className="w-7 h-7 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-30 text-white font-bold flex items-center justify-center"
+                                        >−</button>
+                                        <span className={`font-mono font-bold w-12 text-center ${(settings.maxCards || 0) > 0 ? 'text-red-400' : 'text-gray-500'
+                                            }`}>
+                                            {(settings.maxCards || 0) > 0 ? settings.maxCards : 'OFF'}
+                                        </span>
+                                        <button
+                                            onClick={() => onUpdateSettings({ maxCards: Math.min(50, (settings.maxCards || 0) + 5) })}
+                                            className="w-7 h-7 rounded bg-gray-700 hover:bg-gray-600 text-white font-bold flex items-center justify-center"
+                                        >+</button>
+                                    </div>
+                                </div>
+                                {(settings.maxCards || 0) > 0 && (
+                                    <div className="text-[11px] text-red-400 bg-red-500/10 px-3 py-1 rounded-lg border border-red-500/20">
+                                        💣 {language === 'ko'
+                                            ? `카드가 ${settings.maxCards}장 이상이 되면 탈락합니다`
+                                            : `Eliminated when reaching ${settings.maxCards} cards`}
+                                    </div>
+                                )}
 
                                 {/* Same Number Play Toggle */}
                                 <div className="flex items-center justify-between">
@@ -285,17 +376,17 @@ export default function OneCardRoom({ socket, room, gameState, username, onStart
                                     </h4>
                                     <p className="text-[11px] text-gray-500 mb-3">
                                         {language === 'ko'
-                                            ? '각 공격 카드를 ON/OFF 할 수 있습니다. 같은 종류만 방어 가능하며, 상위 카드로는 막을 수 없습니다.'
-                                            : 'Toggle each attack card. Defense only with same type - higher cards cannot block lower ones.'}
+                                            ? '각 공격 카드의 ON/OFF와 공격력을 설정할 수 있습니다. 같은 종류만 방어 가능합니다.'
+                                            : 'Toggle and set attack power for each card. Defense only with same type.'}
                                     </p>
-                                    <div className="flex flex-wrap gap-2 justify-center">
+                                    <div className="grid gap-2 w-full">
                                         {Object.entries(ATTACK_CARDS_INFO).map(([key, info]) => (
-                                            <AttackCardToggle
+                                            <AttackCardSetting
                                                 key={key}
                                                 cardKey={key}
                                                 info={info}
-                                                enabled={attackCards[key] !== false}
-                                                onChange={(val) => onUpdateSettings({ attackCards: { ...attackCards, [key]: val } })}
+                                                cardSetting={attackCards[key]}
+                                                onUpdate={(val) => onUpdateSettings({ attackCards: { [key]: val } })}
                                                 language={language}
                                             />
                                         ))}
@@ -323,20 +414,33 @@ export default function OneCardRoom({ socket, room, gameState, username, onStart
                                         {settings.sameNumberPlay ? 'ON' : 'OFF'}
                                     </span>
                                 </div>
+                                <div className="flex justify-between">
+                                    <span>{language === 'ko' ? '최대 카드 (탈락)' : 'Max Cards'}</span>
+                                    <span className={`font-bold ${(settings.maxCards || 0) > 0 ? 'text-red-400' : 'text-gray-500'}`}>
+                                        {(settings.maxCards || 0) > 0 ? `${settings.maxCards}장` : 'OFF'}
+                                    </span>
+                                </div>
                                 <div className="border-t border-gray-600 pt-2 mt-2">
                                     <div className="text-xs text-gray-400 mb-2 font-bold uppercase">
                                         ⚔️ {language === 'ko' ? '공격 카드' : 'Attack Cards'}
                                     </div>
-                                    <div className="flex flex-wrap gap-2 justify-center">
-                                        {Object.entries(ATTACK_CARDS_INFO).map(([key, info]) => (
-                                            <span key={key} className={`text-xs px-2 py-1 rounded font-bold ${attackCards[key] !== false
-                                                    ? `bg-${info.color}-500/20 text-${info.color}-300`
-                                                    : 'bg-gray-800 text-gray-600 line-through'
-                                                }`}>
-                                                {language === 'ko' ? info.label_ko : info.label_en} {info.value}
-                                                {attackCards[key] !== false ? ' ✓' : ' ✗'}
-                                            </span>
-                                        ))}
+                                    <div className="grid gap-1.5 w-full">
+                                        {Object.entries(ATTACK_CARDS_INFO).map(([key, info]) => {
+                                            const cs = attackCards[key]
+                                            const isOn = cs?.enabled !== false
+                                            const pw = cs?.power || info.defaultPower
+                                            return (
+                                                <div key={key} className={`flex items-center justify-between text-xs px-3 py-1.5 rounded-lg ${isOn ? 'bg-gray-700/80' : 'bg-gray-800/50 opacity-50'
+                                                    }`}>
+                                                    <span className={`font-bold ${isOn ? 'text-white' : 'text-gray-600 line-through'}`}>
+                                                        {language === 'ko' ? info.label_ko : info.label_en}
+                                                    </span>
+                                                    <span className={`font-mono font-bold ${isOn ? 'text-yellow-400' : 'text-gray-600'}`}>
+                                                        {isOn ? `+${pw}` : 'OFF'}
+                                                    </span>
+                                                </div>
+                                            )
+                                        })}
                                     </div>
                                 </div>
                             </div>
@@ -463,13 +567,18 @@ export default function OneCardRoom({ socket, room, gameState, username, onStart
     }
 
     // --- PLAYING VIEW ---
-    const attackCardsOpts = gameState.options?.attackCards || { two: true, ace: true, blackJoker: true, colorJoker: true }
+    const attackCardsOpts = gameState.options?.attackCards || {
+        two: { enabled: true, power: 2 },
+        ace: { enabled: true, power: 3 },
+        blackJoker: { enabled: true, power: 5 },
+        colorJoker: { enabled: true, power: 7 }
+    }
 
     const isAttackCardEnabled = (card) => {
-        if (card.rank === '2' && attackCardsOpts.two) return true
-        if (card.rank === 'A' && attackCardsOpts.ace) return true
-        if (card.rank === 'BJ' && attackCardsOpts.blackJoker) return true
-        if (card.rank === 'CJ' && attackCardsOpts.colorJoker) return true
+        if (card.rank === '2' && attackCardsOpts.two?.enabled) return true
+        if (card.rank === 'A' && attackCardsOpts.ace?.enabled) return true
+        if (card.rank === 'BJ' && attackCardsOpts.blackJoker?.enabled) return true
+        if (card.rank === 'CJ' && attackCardsOpts.colorJoker?.enabled) return true
         return false
     }
 
@@ -585,6 +694,88 @@ export default function OneCardRoom({ socket, room, gameState, username, onStart
             <div className="absolute top-3 right-3 z-50 text-white/60 text-2xl">
                 {gameState.direction === 1 ? '🔄' : '🔃'}
             </div>
+
+            {/* Max Cards indicator */}
+            {gameState.options?.maxCards > 0 && (
+                <div className="absolute top-10 right-3 z-50 text-red-400 text-[10px] bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded">
+                    💣 MAX {gameState.options.maxCards}
+                </div>
+            )}
+
+            {/* ONE CARD Toast */}
+            <AnimatePresence>
+                {oneCardToast && (
+                    <motion.div
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                        className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[200] pointer-events-none"
+                    >
+                        {oneCardToast.type === 'safe' && (
+                            <div className="bg-emerald-600 text-white text-2xl font-black px-8 py-4 rounded-2xl shadow-2xl border-2 border-emerald-400 animate-bounce">
+                                ✅ {oneCardToast.name} {language === 'ko' ? '원카드 성공!' : 'ONE CARD Safe!'}
+                            </div>
+                        )}
+                        {oneCardToast.type === 'catch' && (
+                            <div className="bg-red-600 text-white text-2xl font-black px-8 py-4 rounded-2xl shadow-2xl border-2 border-red-400 animate-bounce">
+                                🚨 {oneCardToast.name} {language === 'ko' ? '이(가) 잡았다! +2장 패널티!' : 'caught them! +2 penalty!'}
+                            </div>
+                        )}
+                        {oneCardToast.type === 'false' && (
+                            <div className="bg-yellow-600 text-white text-lg font-bold px-6 py-3 rounded-2xl shadow-2xl border-2 border-yellow-400">
+                                ⚠️ {oneCardToast.name} {language === 'ko' ? '잘못 누름! +1장' : 'false call! +1'}
+                            </div>
+                        )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* ONE CARD BUTTON - Always visible for everyone */}
+            {gameState.phase !== 'FINISHED' && myPlayer && !myPlayer.finished && (() => {
+                const isTarget = gameState.oneCardTarget === socket.id
+                const hasActiveTarget = gameState.oneCardTarget && !gameState.oneCardCalled
+                // For target: random position. For others: fixed bottom-right
+                const btnStyle = isTarget ? {
+                    position: 'absolute',
+                    left: `${50 + oneCardBtnPos.x}%`,
+                    top: `${45 + oneCardBtnPos.y}%`,
+                    transform: 'translate(-50%, -50%)',
+                    zIndex: 200,
+                } : {
+                    position: 'absolute',
+                    right: '16px',
+                    bottom: '200px',
+                    zIndex: 200,
+                }
+
+                return (
+                    <motion.button
+                        key={isTarget ? 'target-btn' : 'normal-btn'}
+                        initial={isTarget ? { scale: 0, rotate: 180 } : { scale: 1 }}
+                        animate={isTarget
+                            ? { scale: [1, 1.1, 1], rotate: 0 }
+                            : { scale: 1 }
+                        }
+                        style={btnStyle}
+                        onClick={() => socket.emit('call_onecard')}
+                        className={`font-black rounded-full shadow-2xl border-4 transition-all active:scale-90 select-none
+                            ${hasActiveTarget
+                                ? isTarget
+                                    ? 'bg-gradient-to-br from-red-500 to-orange-500 border-red-300 text-white text-2xl px-8 py-4 animate-pulse shadow-red-500/50'
+                                    : 'bg-gradient-to-br from-yellow-500 to-amber-500 border-yellow-300 text-white text-lg px-6 py-3 hover:scale-110 shadow-yellow-500/50'
+                                : 'bg-gray-700/60 border-gray-600/50 text-gray-500 text-sm px-4 py-2 hover:bg-gray-600/80'
+                            }
+                        `}
+                    >
+                        {hasActiveTarget
+                            ? (isTarget
+                                ? `🚨 ${language === 'ko' ? '원카드!!' : 'ONE CARD!!'}`
+                                : `👆 ${language === 'ko' ? '원카드!' : 'ONE CARD!'}`)
+                            : `🃏 ${language === 'ko' ? '원카드' : 'UNO'}`
+                        }
+                    </motion.button>
+                )
+            })()}
 
             {/* OPPONENTS */}
             <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -760,8 +951,8 @@ export default function OneCardRoom({ socket, room, gameState, username, onStart
                             <motion.button
                                 onClick={handleDraw}
                                 className={`font-bold py-2 px-6 rounded-full shadow-lg transition-all active:scale-95 border-2 ${gameState.pendingAttack > 0
-                                        ? 'bg-red-700 hover:bg-red-600 text-white border-red-500'
-                                        : 'bg-slate-700 hover:bg-slate-600 text-white border-slate-500'
+                                    ? 'bg-red-700 hover:bg-red-600 text-white border-red-500'
+                                    : 'bg-slate-700 hover:bg-slate-600 text-white border-slate-500'
                                     }`}
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.95 }}
