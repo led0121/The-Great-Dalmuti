@@ -17,7 +17,7 @@
  *   - Q: Reverse direction (3+ players)
  *   - 7: Change suit (player picks new suit)
  *   - 3: Can block (nullify) a 2 attack only
- *   - K: No special effect
+ *   - K: Play again (current player gets another turn)
  * 
  * Options:
  *   - sameNumberPlay: Allow playing multiple same-rank cards at once
@@ -198,7 +198,7 @@ class OneCardGame {
     }
 
     isSpecialCard(card) {
-        return ['A', '2', '7', 'J', 'Q', 'BJ', 'CJ'].includes(card.rank);
+        return ['A', '2', '7', 'J', 'Q', 'K', 'BJ', 'CJ'].includes(card.rank);
     }
 
     /**
@@ -336,6 +336,7 @@ class OneCardGame {
         let reverseCount = 0;
         let attackSum = 0;
         let has7 = false;
+        let hasK = false;
         let blocked = false;
         let newAttackType = null;
 
@@ -359,6 +360,9 @@ class OneCardGame {
                     break;
                 case 'Q':
                     reverseCount++;
+                    break;
+                case 'K':
+                    hasK = true;
                     break;
                 case '7':
                     has7 = true;
@@ -420,8 +424,12 @@ class OneCardGame {
         // Apply skip and advance turns
         this.stopTurnTimer();
 
-        for (let i = 0; i <= skipCount; i++) {
-            this.advanceTurnIndex();
+        if (hasK) {
+            // K: current player gets another turn (don't advance)
+        } else {
+            for (let i = 0; i <= skipCount; i++) {
+                this.advanceTurnIndex();
+            }
         }
 
         this.startTurnTimer();
@@ -534,13 +542,13 @@ class OneCardGame {
         this.oneCardTarget = playerId;
         this.oneCardCalled = false;
 
-        // 5-second window to call
+        // 2-second window to call (fast reaction needed!)
         this.oneCardTimer = setTimeout(() => {
             if (this.oneCardTarget && !this.oneCardCalled) {
                 // Auto-penalize: target didn't call in time
                 this.penalizeOneCardTarget();
             }
-        }, 5000);
+        }, 2000);
     }
 
     /**

@@ -103,6 +103,21 @@ class RoomManager {
         const gameType = room.settings.gameType || 'dalmuti';
 
         if (gameType === 'onecard') {
+            // Auto-set maxCards based on player count if not configured
+            const playerCount = room.players.length;
+            const deckCount = room.settings.attackCardCount || 1;
+            const hasBlackJoker = room.settings.attackCards?.blackJoker?.enabled !== false;
+            const hasColorJoker = room.settings.attackCards?.colorJoker?.enabled !== false;
+            const jokersPerDeck = (hasBlackJoker ? 1 : 0) + (hasColorJoker ? 1 : 0);
+            const totalCards = deckCount * (52 + jokersPerDeck);
+
+            if (!room.settings.maxCards || room.settings.maxCards <= 0) {
+                // Auto-calculate: ensure no player can hold more than ~60% of total cards
+                // but at least 15 cards, and scale down for more players
+                const autoMax = Math.max(15, Math.min(Math.floor(totalCards * 0.6 / playerCount) + 10, 30));
+                room.settings.maxCards = autoMax;
+            }
+
             room.game = new OneCardGame(room.players, (gameState) => {
                 this.io.to(roomId).emit('game_update', gameState);
             }, room.settings);
@@ -215,6 +230,19 @@ class RoomManager {
         if (room && room.ownerId === socket.id && room.game) {
             const gameType = room.settings.gameType || 'dalmuti';
             if (gameType === 'onecard') {
+                // Auto-set maxCards based on player count if not configured
+                const playerCount = room.players.length;
+                const deckCount = room.settings.attackCardCount || 1;
+                const hasBlackJoker = room.settings.attackCards?.blackJoker?.enabled !== false;
+                const hasColorJoker = room.settings.attackCards?.colorJoker?.enabled !== false;
+                const jokersPerDeck = (hasBlackJoker ? 1 : 0) + (hasColorJoker ? 1 : 0);
+                const totalCards = deckCount * (52 + jokersPerDeck);
+
+                if (!room.settings.maxCards || room.settings.maxCards <= 0) {
+                    const autoMax = Math.max(15, Math.min(Math.floor(totalCards * 0.6 / playerCount) + 10, 30));
+                    room.settings.maxCards = autoMax;
+                }
+
                 // Restart OneCard game
                 room.game = new OneCardGame(room.players, (gameState) => {
                     this.io.to(roomId).emit('game_update', gameState);

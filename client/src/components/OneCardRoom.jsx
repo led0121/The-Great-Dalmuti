@@ -82,7 +82,7 @@ function PlayingCard({ card, isSelected, onClick, isPlayable = true, size = 'nor
 
     // Determine if this card is a special/attack card
     const attackLabels = { 'A': 'ATK', '2': 'ATK' }
-    const specialLabels = { 'J': 'SKIP', 'Q': 'REV', '7': 'SUIT', '3': '🛡' }
+    const specialLabels = { 'J': 'SKIP', 'Q': 'REV', 'K': 'AGAIN', '7': 'SUIT', '3': '🛡' }
     const badge = attackLabels[card.rank] || specialLabels[card.rank] || null
     const isAttackType = ['A', '2'].includes(card.rank)
     const isDefense = card.rank === '3'
@@ -751,11 +751,12 @@ export default function OneCardRoom({ socket, room, gameState, username, onStart
                 return (
                     <motion.button
                         key={isTarget ? 'target-btn' : 'normal-btn'}
-                        initial={isTarget ? { scale: 0, rotate: 180 } : { scale: 1 }}
+                        initial={isTarget ? { scale: 0.5, rotate: 0, opacity: 0 } : { scale: 1 }}
                         animate={isTarget
-                            ? { scale: [1, 1.1, 1], rotate: 0 }
+                            ? { scale: [1, 1.15, 1], rotate: 0, opacity: 1 }
                             : { scale: 1 }
                         }
+                        transition={isTarget ? { duration: 0.15, ease: 'easeOut' } : {}}
                         style={btnStyle}
                         onClick={() => socket.emit('call_onecard')}
                         className={`font-black rounded-full shadow-2xl border-4 transition-all active:scale-90 select-none
