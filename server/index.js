@@ -95,6 +95,34 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Stats & Profile
+    socket.on('get_profile', (targetUserId, callback) => {
+        const userId = targetUserId || socket.data.userId;
+        if (userId) {
+            const profile = userDB.getProfile(userId);
+            if (callback) callback(profile);
+        }
+    });
+
+    socket.on('get_stats', (_, callback) => {
+        if (socket.data.userId) {
+            const stats = userDB.getStats(socket.data.userId);
+            if (callback) callback(stats);
+        }
+    });
+
+    socket.on('get_game_history', ({ limit } = {}, callback) => {
+        if (socket.data.userId) {
+            const history = userDB.getGameHistory(socket.data.userId, limit || 20);
+            if (callback) callback(history);
+        }
+    });
+
+    socket.on('get_leaderboard', ({ sortBy, limit } = {}, callback) => {
+        const leaderboard = userDB.getLeaderboard(sortBy || 'winRate', limit || 10);
+        if (callback) callback(leaderboard);
+    });
+
     // Legacy login (still works for backward compat)
     socket.on('login', (username) => {
         const safeName = (username || 'Guest').trim().substring(0, 16);

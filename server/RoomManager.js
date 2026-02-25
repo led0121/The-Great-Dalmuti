@@ -350,11 +350,92 @@ class RoomManager {
 
     // === Common Handlers ===
 
+    /**
+     * Record game results for all players in a room
+     */
+    recordGameResults(room) {
+        if (!this.userDB || !room || !room.game) return;
+
+        const gameType = room.settings.gameType || 'dalmuti';
+        const totalPlayers = room.players.length;
+
+        if (gameType === 'blackjack') {
+            const payouts = room.game.getPayouts();
+            for (const p of payouts) {
+                const player = room.players.find(pl => pl.id === p.playerId);
+                if (player && player.userId) {
+                    this.userDB.recordGameResult(player.userId, {
+                        gameType: 'blackjack',
+                        result: p.result || (p.payout > p.bet ? 'win' : p.payout === p.bet ? 'push' : 'lose'),
+                        totalPlayers,
+                        earnings: p.payout || 0,
+                        spent: p.bet || 0,
+                        details: `Bet: ${p.bet}, Payout: ${p.payout}`
+                    });
+                }
+            }
+        } else if (gameType === 'poker') {
+            const payouts = room.game.getPayouts();
+            for (const p of payouts) {
+                const player = room.players.find(pl => pl.id === p.playerId);
+                if (player && player.userId) {
+                    this.userDB.recordGameResult(player.userId, {
+                        gameType: 'poker',
+                        result: p.payout > 0 ? 'win' : 'lose',
+                        totalPlayers,
+                        earnings: p.payout || 0,
+                        spent: p.bet || 0,
+                        details: `Bet: ${p.bet}, Payout: ${p.payout}`
+                    });
+                }
+            }
+        } else if (gameType === 'dalmuti') {
+            const gamePlayers = room.game.players || [];
+            for (const gp of gamePlayers) {
+                const player = room.players.find(pl => pl.id === gp.id);
+                if (player && player.userId) {
+                    const rank = gp.rank || totalPlayers;
+                    this.userDB.recordGameResult(player.userId, {
+                        gameType: 'dalmuti',
+                        result: rank === 1 ? 'win' : 'lose',
+                        rank,
+                        totalPlayers,
+                        earnings: rank === 1 ? (room.betAmount * totalPlayers) : 0,
+                        spent: room.betAmount || 0,
+                        details: `Rank: ${rank}/${totalPlayers}`
+                    });
+                }
+            }
+        } else if (gameType === 'onecard') {
+            const gamePlayers = room.game.players || [];
+            const finishedOrder = room.game.finishedOrder || [];
+            for (const gp of gamePlayers) {
+                const player = room.players.find(pl => pl.id === gp.id);
+                if (player && player.userId) {
+                    const rankIndex = finishedOrder.indexOf(gp.id);
+                    const rank = rankIndex >= 0 ? rankIndex + 1 : totalPlayers;
+                    this.userDB.recordGameResult(player.userId, {
+                        gameType: 'onecard',
+                        result: rank === 1 ? 'win' : 'lose',
+                        rank,
+                        totalPlayers,
+                        earnings: rank === 1 ? (room.betAmount * totalPlayers) : 0,
+                        spent: room.betAmount || 0,
+                        details: `Rank: ${rank}/${totalPlayers}`
+                    });
+                }
+            }
+        }
+    }
+
     handleRestartGame(socket) {
         const roomId = socket.data.roomId;
         const room = this.rooms.get(roomId);
         if (room && room.ownerId === socket.id && room.game) {
             const gameType = room.settings.gameType || 'dalmuti';
+
+            // Record game results BEFORE settling
+            this.recordGameResults(room);
 
             // Settle balances for gambling games
             if ((gameType === 'blackjack' || gameType === 'poker') && this.userDB) {
@@ -371,6 +452,16 @@ class RoomManager {
                                 balance: this.userDB.getBalance(player.userId)
                             });
                         }
+                    }
+                }
+            }
+
+            // Send updated stats to all players
+            for (const player of room.players) {
+                if (player.userId) {
+                    const playerSocket = this.io.sockets.sockets.get(player.id);
+                    if (playerSocket) {
+                        playerSocket.emit('stats_update', this.userDB.getStats(player.userId));
                     }
                 }
             }

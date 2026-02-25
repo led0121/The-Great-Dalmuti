@@ -6,6 +6,7 @@ import GameRoom from './components/GameRoom'
 import OneCardRoom from './components/OneCardRoom'
 import BlackjackRoom from './components/BlackjackRoom'
 import PokerRoom from './components/PokerRoom'
+import ProfileModal from './components/ProfileModal'
 import { LanguageProvider, useLanguage } from './LanguageContext'
 
 // Initialize socket with dynamic host for LAN support
@@ -24,6 +25,7 @@ function AppContent() {
   const [gameState, setGameState] = useState(null)
   const [error, setError] = useState(null)
   const [onlineCount, setOnlineCount] = useState(0)
+  const [showProfile, setShowProfile] = useState(false)
 
   useEffect(() => {
     socket.connect()
@@ -188,8 +190,16 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans flex flex-col items-center justify-center p-4 relative">
-      {/* Language Toggle */}
-      <div className="absolute top-4 right-4 z-50 flex gap-2">
+      {/* Top Bar */}
+      <div className="absolute top-4 right-4 z-50 flex gap-2 items-center">
+        {username && (
+          <button
+            onClick={() => setShowProfile(true)}
+            className="px-3 py-1.5 rounded-lg bg-purple-600/80 hover:bg-purple-500 text-white text-sm font-bold transition-all flex items-center gap-1 border border-purple-500/50"
+          >
+            📊 {language === 'ko' ? '전적' : 'Stats'}
+          </button>
+        )}
         <button
           onClick={() => setLanguage('ko')}
           className={`px-3 py-1 rounded border ${language === 'ko' ? 'bg-amber-500 border-amber-500' : 'bg-transparent border-gray-500 text-gray-400'}`}
@@ -209,6 +219,13 @@ function AppContent() {
           {error}
         </div>
       )}
+
+      {/* Profile Modal */}
+      <ProfileModal
+        socket={socket}
+        isOpen={showProfile}
+        onClose={() => setShowProfile(false)}
+      />
 
       {!username ? (
         <Login onLogin={handleLogin} socket={socket} />
