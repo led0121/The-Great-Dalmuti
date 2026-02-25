@@ -189,7 +189,7 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                             {t('selectGame')}
                         </h3>
                         {isOwner ? (
-                            <div className="flex justify-center gap-3">
+                            <div className="flex justify-center gap-3 flex-wrap">
                                 <button
                                     onClick={() => onUpdateSettings && onUpdateSettings({ gameType: 'dalmuti' })}
                                     className={`px-6 py-3 rounded-lg font-bold transition-all border-2 ${(settings.gameType || 'dalmuti') === 'dalmuti'
@@ -208,14 +208,36 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                                 >
                                     🃏 원카드
                                 </button>
+                                <button
+                                    onClick={() => onUpdateSettings && onUpdateSettings({ gameType: 'blackjack' })}
+                                    className={`px-6 py-3 rounded-lg font-bold transition-all border-2 ${settings.gameType === 'blackjack'
+                                        ? 'bg-purple-500 border-purple-400 text-white shadow-lg shadow-purple-500/30 scale-105'
+                                        : 'bg-gray-800 border-gray-600 text-gray-400 hover:border-purple-500/50'
+                                        }`}
+                                >
+                                    🎰 블랙잭
+                                </button>
+                                <button
+                                    onClick={() => onUpdateSettings && onUpdateSettings({ gameType: 'poker' })}
+                                    className={`px-6 py-3 rounded-lg font-bold transition-all border-2 ${settings.gameType === 'poker'
+                                        ? 'bg-blue-500 border-blue-400 text-white shadow-lg shadow-blue-500/30 scale-105'
+                                        : 'bg-gray-800 border-gray-600 text-gray-400 hover:border-blue-500/50'
+                                        }`}
+                                >
+                                    ♠️ 포커
+                                </button>
                             </div>
                         ) : (
                             <div className="text-center">
-                                <span className={`inline-block px-4 py-2 rounded-lg font-bold ${settings.gameType === 'onecard'
-                                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                                    : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                <span className={`inline-block px-4 py-2 rounded-lg font-bold ${settings.gameType === 'onecard' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                                        settings.gameType === 'blackjack' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
+                                            settings.gameType === 'poker' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                                                'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                                     }`}>
-                                    {settings.gameType === 'onecard' ? '🃏 원카드' : `👑 ${t('appTitle') || '달무티'}`}
+                                    {settings.gameType === 'onecard' ? '🃏 원카드' :
+                                        settings.gameType === 'blackjack' ? '🎰 블랙잭' :
+                                            settings.gameType === 'poker' ? '♠️ 포커' :
+                                                `👑 ${t('appTitle') || '달무티'}`}
                                 </span>
                             </div>
                         )}

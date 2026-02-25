@@ -4,6 +4,8 @@ import Login from './components/Login'
 import Lobby from './components/Lobby'
 import GameRoom from './components/GameRoom'
 import OneCardRoom from './components/OneCardRoom'
+import BlackjackRoom from './components/BlackjackRoom'
+import PokerRoom from './components/PokerRoom'
 import { LanguageProvider, useLanguage } from './LanguageContext'
 
 // Initialize socket with dynamic host for LAN support
@@ -16,16 +18,19 @@ const socket = io(socketUrl, {
 function AppContent() {
   const { language, setLanguage, t } = useLanguage();
   const [connected, setConnected] = useState(false)
-  const [username, setUsername] = useState('') // Logged in user name
-  const [currentRoom, setCurrentRoom] = useState(null) // Room data
-  const [gameState, setGameState] = useState(null) // Game data
+  const [username, setUsername] = useState('')
+  const [userInfo, setUserInfo] = useState(null) // { id, username, displayName, balance }
+  const [currentRoom, setCurrentRoom] = useState(null)
+  const [gameState, setGameState] = useState(null)
   const [error, setError] = useState(null)
+  const [onlineCount, setOnlineCount] = useState(0)
 
   useEffect(() => {
     socket.connect()
 
     socket.on('connect', () => {
       setConnected(true)
+      socket.emit('request_online_count')
     })
 
     socket.on('disconnect', () => {
@@ -34,7 +39,7 @@ function AppContent() {
     })
 
     socket.on('login_success', (data) => {
-      // confirm login
+      // legacy login confirm
     })
 
     socket.on('room_update', (room) => {
@@ -59,6 +64,14 @@ function AppContent() {
       setTimeout(() => setError(null), 3000)
     })
 
+    socket.on('online_count', (count) => {
+      setOnlineCount(count)
+    })
+
+    socket.on('balance_update', ({ balance }) => {
+      setUserInfo(prev => prev ? { ...prev, balance } : prev)
+    })
+
     return () => {
       socket.off('connect')
       socket.off('disconnect')
@@ -66,22 +79,25 @@ function AppContent() {
       socket.off('room_list')
       socket.off('game_update')
       socket.off('error')
+      socket.off('online_count')
+      socket.off('balance_update')
+      socket.off('login_success')
     }
   }, [])
 
-  const handleLogin = (name) => {
-    setUsername(name)
-    socket.emit('login', name)
-    // Request initial list
-    socket.emit('request_room_list');
+  const handleLogin = (user) => {
+    // user = { id, username, displayName, balance } from auth
+    setUsername(user.displayName || user.username)
+    setUserInfo(user)
+    socket.emit('request_room_list')
+    socket.emit('request_online_count')
   }
 
   const [gameOptions, setGameOptions] = useState({ timerDuration: 30 })
   const [roomList, setRoomList] = useState([])
 
-  const handleCreateRoom = (roomName, options) => {
-    socket.emit('create_room', roomName);
-    setGameOptions(options); // Store options to send when starting game
+  const handleCreateRoom = (data) => {
+    socket.emit('create_room', data)
   }
 
   const handleJoinRoom = (roomId) => {
@@ -112,8 +128,34 @@ function AppContent() {
   const getGameRoomComponent = () => {
     const gameType = currentRoom?.settings?.gameType || 'dalmuti';
 
-    // If game is in LOBBY, show the appropriate lobby based on game type
-    // If game state reports onecard type, show OneCardRoom
+    if (gameType === 'blackjack' || gameState?.gameType === 'blackjack') {
+      return (
+        <BlackjackRoom
+          socket={socket}
+          room={currentRoom}
+          gameState={gameState}
+          username={username}
+          onStartGame={handleStartGame}
+          onLeave={handleLeaveRoom}
+          onUpdateSettings={handleUpdateSettings}
+        />
+      )
+    }
+
+    if (gameType === 'poker' || gameState?.gameType === 'poker') {
+      return (
+        <PokerRoom
+          socket={socket}
+          room={currentRoom}
+          gameState={gameState}
+          username={username}
+          onStartGame={handleStartGame}
+          onLeave={handleLeaveRoom}
+          onUpdateSettings={handleUpdateSettings}
+        />
+      )
+    }
+
     if (gameType === 'onecard' || gameState?.gameType === 'onecard') {
       return (
         <OneCardRoom
@@ -169,14 +211,17 @@ function AppContent() {
       )}
 
       {!username ? (
-        <Login onLogin={handleLogin} />
+        <Login onLogin={handleLogin} socket={socket} />
       ) : !currentRoom ? (
         <Lobby
           username={username}
+          userInfo={userInfo}
           roomList={roomList}
           onCreateRoom={handleCreateRoom}
           onJoinRoom={handleJoinRoom}
           onRefreshList={() => socket.emit('request_room_list')}
+          socket={socket}
+          onlineCount={onlineCount}
         />
       ) : (
         getGameRoomComponent()
@@ -192,7 +237,5 @@ function App() {
     </LanguageProvider>
   )
 }
-
-
 
 export default App

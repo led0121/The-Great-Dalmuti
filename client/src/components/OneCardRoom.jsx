@@ -254,10 +254,10 @@ export default function OneCardRoom({ socket, room, gameState, username, onStart
                     {/* Game Type Selection */}
                     <div className="mb-4">
                         {isOwner ? (
-                            <div className="flex justify-center gap-3">
+                            <div className="flex justify-center gap-3 flex-wrap">
                                 <button
                                     onClick={() => onUpdateSettings({ gameType: 'dalmuti' })}
-                                    className={`px-6 py-2 rounded-lg font-bold transition-all border-2 ${settings.gameType !== 'onecard'
+                                    className={`px-6 py-2 rounded-lg font-bold transition-all border-2 ${settings.gameType === 'dalmuti' || (!settings.gameType)
                                         ? 'bg-amber-500 border-amber-400 text-white shadow-lg shadow-amber-500/30'
                                         : 'bg-gray-800 border-gray-600 text-gray-400 hover:border-amber-500/50'
                                         }`}
@@ -272,6 +272,24 @@ export default function OneCardRoom({ socket, room, gameState, username, onStart
                                         }`}
                                 >
                                     🃏 {t('onecard')}
+                                </button>
+                                <button
+                                    onClick={() => onUpdateSettings({ gameType: 'blackjack' })}
+                                    className={`px-6 py-2 rounded-lg font-bold transition-all border-2 ${settings.gameType === 'blackjack'
+                                        ? 'bg-purple-500 border-purple-400 text-white shadow-lg shadow-purple-500/30'
+                                        : 'bg-gray-800 border-gray-600 text-gray-400 hover:border-purple-500/50'
+                                        }`}
+                                >
+                                    🎰 블랙잭
+                                </button>
+                                <button
+                                    onClick={() => onUpdateSettings({ gameType: 'poker' })}
+                                    className={`px-6 py-2 rounded-lg font-bold transition-all border-2 ${settings.gameType === 'poker'
+                                        ? 'bg-blue-500 border-blue-400 text-white shadow-lg shadow-blue-500/30'
+                                        : 'bg-gray-800 border-gray-600 text-gray-400 hover:border-blue-500/50'
+                                        }`}
+                                >
+                                    ♠️ 포커
                                 </button>
                             </div>
                         ) : (
