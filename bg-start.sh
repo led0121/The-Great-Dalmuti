@@ -77,7 +77,7 @@ sleep 2
 # ============================================================
 echo -e "${CYAN}🚀 클라이언트 시작 중...${NC}"
 cd "$PROJECT_DIR/client"
-nohup npx vite --host 0.0.0.0 --port ${CLIENT_PORT} > "$LOG_DIR/client.log" 2>&1 &
+nohup env HOST=0.0.0.0 npm run dev -- --host --port ${CLIENT_PORT} > "$LOG_DIR/client.log" 2>&1 &
 CLIENT_PID=$!
 echo -e "${GREEN}  ✅ 클라이언트 시작됨 (PID: ${CLIENT_PID})${NC}"
 
