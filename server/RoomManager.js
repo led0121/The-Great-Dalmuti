@@ -127,8 +127,10 @@ class RoomManager {
             return;
         }
 
-        // Deduct bet amount from all players
-        if (room.betAmount > 0 && this.userDB) {
+        // Deduct bet amount from all players (Dalmuti/OneCard only)
+        // Blackjack/Poker have their own internal betting, settled in handleRestartGame
+        const needsBetDeduction = (gameType === 'dalmuti' || gameType === 'onecard');
+        if (needsBetDeduction && room.betAmount > 0 && this.userDB) {
             for (const player of room.players) {
                 if (player.userId) {
                     const balance = this.userDB.getBalance(player.userId);
@@ -443,9 +445,63 @@ class RoomManager {
                 for (const p of payouts) {
                     const player = room.players.find(pl => pl.id === p.playerId);
                     if (player && player.userId) {
-                        if (p.payout > 0) {
-                            this.userDB.addBalance(player.userId, p.payout);
+                        // payout already includes the original bet for winners
+                        // So net result = payout - bet
+                        // win: payout=bet*2, net=+bet (profit)
+                        // blackjack: payout=bet*2.5, net=+bet*1.5
+                        // push: payout=bet, net=0
+                        // lose: payout=0, net=-bet (loss)
+                        const netResult = p.payout - p.bet;
+                        if (netResult > 0) {
+                            this.userDB.addBalance(player.userId, netResult);
+                        } else if (netResult < 0) {
+                            this.userDB.deductBalance(player.userId, Math.abs(netResult));
                         }
+                        // push (netResult === 0): no change
+
+                        const playerSocket = this.io.sockets.sockets.get(player.id);
+                        if (playerSocket) {
+                            playerSocket.emit('balance_update', {
+                                balance: this.userDB.getBalance(player.userId)
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Settle balances for Dalmuti / OneCard
+            if ((gameType === 'dalmuti' || gameType === 'onecard') && this.userDB && room.betAmount > 0) {
+                const totalPrize = room.betAmount * room.players.length;
+                let winnerId = null;
+
+                if (gameType === 'dalmuti') {
+                    // 1등 (rank === 1)인 플레이어
+                    const gamePlayers = room.game.players || [];
+                    const winner = gamePlayers.find(gp => gp.rank === 1);
+                    if (winner) winnerId = winner.id;
+                } else if (gameType === 'onecard') {
+                    // finishedOrder 첫 번째 플레이어
+                    const finishedOrder = room.game.finishedOrder || [];
+                    if (finishedOrder.length > 0) winnerId = finishedOrder[0];
+                }
+
+                if (winnerId) {
+                    const winnerPlayer = room.players.find(pl => pl.id === winnerId);
+                    if (winnerPlayer && winnerPlayer.userId) {
+                        // 참가비는 startGame에서 이미 차감됨, 상금풀 전체를 1등에게
+                        this.userDB.addBalance(winnerPlayer.userId, totalPrize);
+                        const winnerSocket = this.io.sockets.sockets.get(winnerPlayer.id);
+                        if (winnerSocket) {
+                            winnerSocket.emit('balance_update', {
+                                balance: this.userDB.getBalance(winnerPlayer.userId)
+                            });
+                        }
+                    }
+                }
+
+                // 모든 플레이어에게 잔고 업데이트 전송
+                for (const player of room.players) {
+                    if (player.userId) {
                         const playerSocket = this.io.sockets.sockets.get(player.id);
                         if (playerSocket) {
                             playerSocket.emit('balance_update', {

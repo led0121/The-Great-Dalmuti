@@ -97,14 +97,29 @@ install_server() {
 
     if [ -d "node_modules" ]; then
         print_info "기존 node_modules 발견 → 재설치합니다"
-        rm -rf node_modules package-lock.json
+        rm -rf node_modules
     fi
 
-    if npm install 2>&1; then
-        print_success "서버 패키지 설치 완료"
+    # package-lock.json이 있으면 npm ci (정확한 버전 설치), 없으면 npm install
+    if [ -f "package-lock.json" ]; then
+        if npm ci 2>&1; then
+            print_success "서버 패키지 설치 완료 (npm ci)"
+        else
+            print_info "npm ci 실패, npm install로 재시도..."
+            if npm install --legacy-peer-deps 2>&1; then
+                print_success "서버 패키지 설치 완료"
+            else
+                print_error "서버 패키지 설치 실패!"
+                exit 1
+            fi
+        fi
     else
-        print_error "서버 패키지 설치 실패!"
-        exit 1
+        if npm install --legacy-peer-deps 2>&1; then
+            print_success "서버 패키지 설치 완료"
+        else
+            print_error "서버 패키지 설치 실패!"
+            exit 1
+        fi
     fi
 
     mkdir -p "$PROJECT_DIR/server/data"
@@ -121,20 +136,38 @@ install_client() {
 
     if [ -d "node_modules" ]; then
         print_info "기존 node_modules 발견 → 재설치합니다"
-        rm -rf node_modules package-lock.json
+        rm -rf node_modules
     fi
 
-    # --legacy-peer-deps: Node 18 등에서 의존성 충돌 방지
-    if npm install --legacy-peer-deps 2>&1; then
-        print_success "클라이언트 패키지 설치 완료"
-    else
-        print_error "클라이언트 패키지 설치 실패!"
-        print_info "재시도: npm install --force"
-        if npm install --force 2>&1; then
-            print_success "클라이언트 패키지 설치 완료 (--force)"
+    # package-lock.json이 있으면 npm ci (정확한 버전 설치), 없으면 npm install
+    if [ -f "package-lock.json" ]; then
+        if npm ci 2>&1; then
+            print_success "클라이언트 패키지 설치 완료 (npm ci)"
         else
-            print_error "클라이언트 패키지 설치 실패! 수동 설치가 필요합니다."
-            exit 1
+            print_info "npm ci 실패, npm install --legacy-peer-deps로 재시도..."
+            if npm install --legacy-peer-deps 2>&1; then
+                print_success "클라이언트 패키지 설치 완료"
+            else
+                print_info "npm install --force로 재시도..."
+                if npm install --force 2>&1; then
+                    print_success "클라이언트 패키지 설치 완료 (--force)"
+                else
+                    print_error "클라이언트 패키지 설치 실패!"
+                    exit 1
+                fi
+            fi
+        fi
+    else
+        if npm install --legacy-peer-deps 2>&1; then
+            print_success "클라이언트 패키지 설치 완료"
+        else
+            print_info "npm install --force로 재시도..."
+            if npm install --force 2>&1; then
+                print_success "클라이언트 패키지 설치 완료 (--force)"
+            else
+                print_error "클라이언트 패키지 설치 실패!"
+                exit 1
+            fi
         fi
     fi
 }
