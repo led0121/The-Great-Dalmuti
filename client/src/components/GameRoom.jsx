@@ -215,7 +215,7 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                                         : 'bg-gray-800 border-gray-600 text-gray-400 hover:border-purple-500/50'
                                         }`}
                                 >
-                                    🎰 블랙잭
+                                    🂡 블랙잭
                                 </button>
                                 <button
                                     onClick={() => onUpdateSettings && onUpdateSettings({ gameType: 'poker' })}
@@ -235,7 +235,7 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                                                 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                                     }`}>
                                     {settings.gameType === 'onecard' ? '🃏 원카드' :
-                                        settings.gameType === 'blackjack' ? '🎰 블랙잭' :
+                                        settings.gameType === 'blackjack' ? '🂡 블랙잭' :
                                             settings.gameType === 'poker' ? '♠️ 포커' :
                                                 `👑 ${t('appTitle') || '달무티'}`}
                                 </span>

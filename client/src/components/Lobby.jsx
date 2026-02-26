@@ -15,7 +15,7 @@ export default function Lobby({ username, userInfo, roomList, onCreateRoom, onJo
     const gameTypeIcons = {
         dalmuti: '👑',
         onecard: '🃏',
-        blackjack: '🎰',
+        blackjack: '🂡',
         poker: '♠️'
     }
     const gameTypeLabels = {

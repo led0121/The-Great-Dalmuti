@@ -5,7 +5,7 @@ import { useLanguage } from '../LanguageContext'
 const GAME_ICONS = {
     dalmuti: '👑',
     onecard: '🃏',
-    blackjack: '🎰',
+    blackjack: '🂡',
     poker: '♠️'
 }
 

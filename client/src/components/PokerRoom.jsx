@@ -93,7 +93,7 @@ export default function PokerRoom({ socket, room, gameState, username, onStartGa
                                                 : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
                                                 }`}
                                         >
-                                            {gt === 'dalmuti' ? '👑' : gt === 'onecard' ? '🃏' : gt === 'blackjack' ? '🎰' : '♠️'} {gt.charAt(0).toUpperCase() + gt.slice(1)}
+                                            {gt === 'dalmuti' ? '👑' : gt === 'onecard' ? '🃏' : gt === 'blackjack' ? '🂡' : '♠️'} {gt.charAt(0).toUpperCase() + gt.slice(1)}
                                         </button>
                                     ))}
                                 </div>

@@ -280,7 +280,7 @@ export default function OneCardRoom({ socket, room, gameState, username, onStart
                                         : 'bg-gray-800 border-gray-600 text-gray-400 hover:border-purple-500/50'
                                         }`}
                                 >
-                                    🎰 블랙잭
+                                    🂡 블랙잭
                                 </button>
                                 <button
                                     onClick={() => onUpdateSettings({ gameType: 'poker' })}

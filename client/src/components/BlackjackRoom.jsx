@@ -55,7 +55,7 @@ export default function BlackjackRoom({ socket, room, gameState, username, onSta
                     {/* Header */}
                     <div className="flex justify-between items-center mb-6">
                         <div>
-                            <h2 className="text-2xl font-black text-purple-400">🎰 {ko ? '블랙잭' : 'Blackjack'}</h2>
+                            <h2 className="text-2xl font-black text-purple-400">🂡 {ko ? '블랙잭' : 'Blackjack'}</h2>
                             <p className="text-gray-400 text-sm">Room: {room.name} (ID: {room.id})</p>
                         </div>
                         <button onClick={onLeave} className="text-gray-400 hover:text-red-400 transition-colors text-sm">
@@ -90,7 +90,7 @@ export default function BlackjackRoom({ socket, room, gameState, username, onSta
                                             : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
                                             }`}
                                     >
-                                        {gt === 'dalmuti' ? '👑' : gt === 'onecard' ? '🃏' : gt === 'blackjack' ? '🎰' : '♠️'} {gt.charAt(0).toUpperCase() + gt.slice(1)}
+                                        {gt === 'dalmuti' ? '👑' : gt === 'onecard' ? '🃏' : gt === 'blackjack' ? '🂡' : '♠️'} {gt.charAt(0).toUpperCase() + gt.slice(1)}
                                     </button>
                                 ))}
                             </div>
@@ -117,7 +117,7 @@ export default function BlackjackRoom({ socket, room, gameState, username, onSta
             {/* Top Bar */}
             <div className="flex justify-between items-center px-4 py-2 bg-black/40 backdrop-blur z-50">
                 <div className="flex items-center gap-4">
-                    <span className="text-purple-400 font-black text-lg">🎰 {ko ? '블랙잭' : 'Blackjack'}</span>
+                    <span className="text-purple-400 font-black text-lg">🂡 {ko ? '블랙잭' : 'Blackjack'}</span>
                     <span className="text-gray-400 text-xs">Round #{gameState?.roundNumber || 1}</span>
                 </div>
                 <div className="flex items-center gap-4">
@@ -228,7 +228,7 @@ export default function BlackjackRoom({ socket, room, gameState, username, onSta
                                                     'bg-red-600 text-white'
                                         }`}
                                 >
-                                    {myPlayer.result === 'blackjack' ? '🎰 BLACKJACK!' :
+                                    {myPlayer.result === 'blackjack' ? '🂡 BLACKJACK!' :
                                         myPlayer.result === 'win' ? '🎉 WIN!' :
                                             myPlayer.result === 'push' ? '🤝 PUSH' :
                                                 '😢 LOSE'}
