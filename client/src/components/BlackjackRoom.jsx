@@ -162,12 +162,12 @@ export default function BlackjackRoom({ socket, room, gameState, username, onSta
                     initial={{ scale: 0.8, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     className={`inline-block px-6 py-2 rounded-full font-bold text-sm border ${phase === 'BETTING' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
-                            phase === 'PLAYING' ? 'bg-green-500/20 text-green-300 border-green-500/30' :
-                                phase === 'DEALER_TURN' ? 'bg-red-500/20 text-red-300 border-red-500/30' :
-                                    'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                        phase === 'PLAYING' ? 'bg-green-500/20 text-green-300 border-green-500/30' :
+                            phase === 'DEALER_TURN' ? 'bg-red-500/20 text-red-300 border-red-500/30' :
+                                'bg-purple-500/20 text-purple-300 border-purple-500/30'
                         }`}
                 >
-                    {phase === 'BETTING' ? (ko ? '💰 베팅 중...' : '💰 Betting...') :
+                    {phase === 'BETTING' ? (ko ? '💰 포인트 사용 중...' : '💰 Setting points...') :
                         phase === 'PLAYING' ? (ko ? '🃏 플레이 중' : '🃏 Playing') :
                             phase === 'DEALER_TURN' ? (ko ? '🎩 딜러 턴' : '🎩 Dealer Turn') :
                                 (ko ? '🏆 결과' : '🏆 Results')}
@@ -190,8 +190,8 @@ export default function BlackjackRoom({ socket, room, gameState, username, onSta
                             <span className="text-xs text-amber-300">🪙 {p.bet || 0}</span>
                             {p.result && (
                                 <span className={`text-xs font-bold px-2 py-0.5 rounded ${p.result === 'win' || p.result === 'blackjack' ? 'text-green-400 bg-green-500/20' :
-                                        p.result === 'push' ? 'text-yellow-400 bg-yellow-500/20' :
-                                            'text-red-400 bg-red-500/20'
+                                    p.result === 'push' ? 'text-yellow-400 bg-yellow-500/20' :
+                                        'text-red-400 bg-red-500/20'
                                     }`}>
                                     {p.result === 'blackjack' ? 'BJ!' : p.result === 'win' ? 'WIN' : p.result === 'push' ? 'PUSH' : 'LOSE'}
                                 </span>
@@ -223,9 +223,9 @@ export default function BlackjackRoom({ socket, room, gameState, username, onSta
                                     initial={{ scale: 0 }}
                                     animate={{ scale: 1 }}
                                     className={`text-lg font-black px-4 py-1 rounded-full ${myPlayer.result === 'blackjack' ? 'bg-gradient-to-r from-yellow-500 to-amber-500 text-white' :
-                                            myPlayer.result === 'win' ? 'bg-green-500 text-white' :
-                                                myPlayer.result === 'push' ? 'bg-yellow-600 text-white' :
-                                                    'bg-red-600 text-white'
+                                        myPlayer.result === 'win' ? 'bg-green-500 text-white' :
+                                            myPlayer.result === 'push' ? 'bg-yellow-600 text-white' :
+                                                'bg-red-600 text-white'
                                         }`}
                                 >
                                     {myPlayer.result === 'blackjack' ? '🂡 BLACKJACK!' :
@@ -263,7 +263,7 @@ export default function BlackjackRoom({ socket, room, gameState, username, onSta
                                 onClick={() => socket.emit('blackjack_bet', betInput)}
                                 className="bg-gradient-to-r from-amber-600 to-yellow-500 text-white font-black py-2 px-8 rounded-xl shadow-lg"
                             >
-                                🪙 {ko ? '베팅' : 'BET'} {betInput.toLocaleString()}
+                                🪙 {ko ? '입력' : 'USE'} {betInput.toLocaleString()}
                             </motion.button>
                         </>
                     )}
@@ -324,7 +324,7 @@ export default function BlackjackRoom({ socket, room, gameState, username, onSta
                 {myPlayer?.bet > 0 && (
                     <div className="text-center mt-2">
                         <span className="text-amber-300 text-sm font-bold">
-                            🪙 {ko ? '베팅' : 'Bet'}: {myPlayer.bet.toLocaleString()}
+                            🪙 {ko ? '사용 포인트' : 'Points'}: {myPlayer.bet.toLocaleString()}
                         </span>
                     </div>
                 )}
@@ -348,7 +348,7 @@ export default function BlackjackRoom({ socket, room, gameState, username, onSta
                                     <span className="text-white font-bold">{r.username}</span>
                                     <div className="flex items-center gap-2">
                                         <span className={`font-black ${r.result === 'win' || r.result === 'blackjack' ? 'text-green-400' :
-                                                r.result === 'push' ? 'text-yellow-400' : 'text-red-400'
+                                            r.result === 'push' ? 'text-yellow-400' : 'text-red-400'
                                             }`}>
                                             {r.result === 'blackjack' ? 'BLACKJACK!' :
                                                 r.result === 'win' ? 'WIN' :

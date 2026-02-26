@@ -10,10 +10,10 @@ const GAME_ICONS = {
 }
 
 const GAME_LABELS = {
-    dalmuti: '달무티',
-    onecard: '원카드',
-    blackjack: '블랙잭',
-    poker: '포커'
+    dalmuti: { ko: '달무티', en: 'Dalmuti' },
+    onecard: { ko: '원카드', en: 'OneCard' },
+    blackjack: { ko: '블랙잭', en: 'Blackjack' },
+    poker: { ko: '포커', en: 'Poker' }
 }
 
 const RESULT_COLORS = {
@@ -26,12 +26,12 @@ const RESULT_COLORS = {
 }
 
 const RESULT_LABELS = {
-    win: '승리',
-    blackjack: '블랙잭!',
-    lose: '패배',
-    bust: '버스트',
-    push: '푸시',
-    draw: '무승부'
+    win: { ko: '승리', en: 'Win' },
+    blackjack: { ko: '블랙잭!', en: 'Blackjack!' },
+    lose: { ko: '패배', en: 'Lose' },
+    bust: { ko: '버스트', en: 'Bust' },
+    push: { ko: '푸시', en: 'Push' },
+    draw: { ko: '무승부', en: 'Draw' }
 }
 
 export default function ProfileModal({ socket, isOpen, onClose }) {
@@ -245,7 +245,7 @@ function StatsTab({ stats, ko, profile }) {
                                 <div className="flex items-center gap-3">
                                     <span className="text-lg">{GAME_ICONS[gameType] || '🎮'}</span>
                                     <div>
-                                        <div className="text-white font-bold text-sm">{GAME_LABELS[gameType] || gameType}</div>
+                                        <div className="text-white font-bold text-sm">{GAME_LABELS[gameType]?.[ko ? 'ko' : 'en'] || gameType}</div>
                                         <div className="text-xs text-gray-500">{gs.games}{ko ? '경기' : ' games'}</div>
                                     </div>
                                 </div>
@@ -325,7 +325,7 @@ function HistoryTab({ history, ko }) {
                             <div>
                                 <div className="flex items-center gap-2">
                                     <span className={`font-bold text-sm ${RESULT_COLORS[game.result] || 'text-gray-400'}`}>
-                                        {RESULT_LABELS[game.result] || game.result}
+                                        {RESULT_LABELS[game.result]?.[ko ? 'ko' : 'en'] || game.result}
                                     </span>
                                     {game.rank && (
                                         <span className="text-xs text-gray-500">
@@ -340,7 +340,7 @@ function HistoryTab({ history, ko }) {
                             <div className={`font-bold text-sm ${game.netGain > 0 ? 'text-green-400' : game.netGain < 0 ? 'text-red-400' : 'text-gray-500'}`}>
                                 {game.netGain > 0 ? '+' : ''}{game.netGain.toLocaleString()}
                             </div>
-                            <div className="text-[10px] text-gray-500">{GAME_LABELS[game.gameType] || game.gameType}</div>
+                            <div className="text-[10px] text-gray-500">{GAME_LABELS[game.gameType]?.[ko ? 'ko' : 'en'] || game.gameType}</div>
                         </div>
                     </motion.div>
                 )

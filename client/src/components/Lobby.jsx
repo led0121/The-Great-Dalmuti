@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import PatchNotes from './PatchNotes'
+import RulesModal from './RulesModal'
 import { useLanguage } from '../LanguageContext'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -7,6 +8,7 @@ export default function Lobby({ username, userInfo, roomList, onCreateRoom, onJo
     const [roomName, setRoomName] = useState('')
     const [roomIdToJoin, setRoomIdToJoin] = useState('')
     const [betAmount, setBetAmount] = useState(0)
+    const [isRulesOpen, setIsRulesOpen] = useState(false)
     const { language } = useLanguage()
     const ko = language === 'ko'
 
@@ -69,6 +71,14 @@ export default function Lobby({ username, userInfo, roomList, onCreateRoom, onJo
                             {onlineCount || 0} {ko ? '명 접속중' : 'online'}
                         </span>
                     </div>
+
+                    {/* How to play btn */}
+                    <button
+                        onClick={() => setIsRulesOpen(true)}
+                        className="bg-gray-700 hover:bg-gray-600 transition-colors px-3 py-2 rounded-full text-white text-sm font-bold"
+                    >
+                        ❔ {ko ? '게임 규칙' : 'Rules'}
+                    </button>
                 </div>
             </div>
 
@@ -103,7 +113,7 @@ export default function Lobby({ username, userInfo, roomList, onCreateRoom, onJo
                                 {/* Bet Amount */}
                                 <div>
                                     <label className="text-xs text-gray-400 font-bold mb-1 block uppercase tracking-wider">
-                                        🪙 {ko ? '판돈' : 'Bet Amount'}
+                                        🪙 {ko ? '참가 포인트' : 'Entry Point'}
                                     </label>
                                     <div className="flex gap-2">
                                         {[0, 100, 500, 1000, 5000].map(amt => (
@@ -223,6 +233,8 @@ export default function Lobby({ username, userInfo, roomList, onCreateRoom, onJo
                     </div>
                 </div>
             </div>
+
+            <RulesModal isOpen={isRulesOpen} onClose={() => setIsRulesOpen(false)} />
         </div>
     )
 }

@@ -230,9 +230,9 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                         ) : (
                             <div className="text-center">
                                 <span className={`inline-block px-4 py-2 rounded-lg font-bold ${settings.gameType === 'onecard' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                                        settings.gameType === 'blackjack' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
-                                            settings.gameType === 'poker' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
-                                                'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                    settings.gameType === 'blackjack' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
+                                        settings.gameType === 'poker' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                                            'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                                     }`}>
                                     {settings.gameType === 'onecard' ? '🃏 원카드' :
                                         settings.gameType === 'blackjack' ? '🂡 블랙잭' :
@@ -291,7 +291,7 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                     )}
 
                     <button onClick={() => setIsRulesOpen(true)} className="absolute top-4 left-4 text-gray-400 hover:text-white underline text-sm z-10">{t('howToPlayBtn')}</button>
-                    {/* <RulesModal isOpen={isRulesOpen} onClose={() => setIsRulesOpen(false)} currentPhase="LOBBY" /> */}
+                    <RulesModal isOpen={isRulesOpen} onClose={() => setIsRulesOpen(false)} />
                 </div>
             </div>
         )

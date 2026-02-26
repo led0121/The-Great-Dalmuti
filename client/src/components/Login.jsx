@@ -58,7 +58,7 @@ export default function Login({ onLogin, socket }) {
                 className="text-center mb-8"
             >
                 <h1 className="text-5xl font-black mb-2 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 bg-clip-text text-transparent drop-shadow-lg">
-                    🎰 {ko ? '카지노 로비' : 'Casino Lobby'}
+                    🎰 {ko ? '보드게임 라운지' : 'Board Game Lounge'}
                 </h1>
                 <p className="text-gray-400 text-sm">
                     {ko ? '달무티 • 원카드 • 블랙잭 • 포커' : 'Dalmuti • OneCard • Blackjack • Poker'}

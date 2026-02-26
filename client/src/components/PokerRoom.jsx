@@ -223,8 +223,8 @@ export default function PokerRoom({ socket, room, gameState, username, onStartGa
                                 }}
                             >
                                 <div className={`bg-gray-900/80 rounded-xl px-3 py-2 border ${gameState.currentPlayer === p.id ? 'border-green-400 shadow-lg shadow-green-500/30' :
-                                        p.folded ? 'border-gray-700/30 opacity-40' :
-                                            'border-gray-700/50'
+                                    p.folded ? 'border-gray-700/30 opacity-40' :
+                                        'border-gray-700/50'
                                     }`}>
                                     <div className="flex items-center gap-1 mb-1">
                                         <span className="text-xs text-gray-300 font-bold">{p.username}</span>
@@ -362,7 +362,7 @@ export default function PokerRoom({ socket, room, gameState, username, onStartGa
                 {myPlayer?.bet > 0 && (
                     <div className="text-center mt-2">
                         <span className="text-amber-300 text-sm font-bold">
-                            🪙 {ko ? '현재 베팅' : 'Current Bet'}: {myPlayer.bet.toLocaleString()}
+                            🪙 {ko ? '사용 포인트' : 'Used Points'}: {myPlayer.bet.toLocaleString()}
                         </span>
                     </div>
                 )}
