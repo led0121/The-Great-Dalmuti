@@ -164,38 +164,97 @@ build_client() {
 # ============================================================
 #  Step 4: 포트 정리
 # ============================================================
+
+# 특정 포트의 프로세스를 종료하는 함수
+kill_port() {
+    local port=$1
+    local found=false
+
+    # 방법 1: fuser
+    if command -v fuser &> /dev/null; then
+        fuser -k ${port}/tcp > /dev/null 2>&1 && found=true
+    fi
+
+    # 방법 2: lsof
+    if command -v lsof &> /dev/null; then
+        lsof -ti:${port} 2>/dev/null | xargs kill -9 2>/dev/null && found=true
+    fi
+
+    # 방법 3: ss + kill (대부분의 Linux에 기본 설치)
+    if command -v ss &> /dev/null; then
+        local pids=$(ss -tlnp "sport = :${port}" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | sort -u)
+        if [ -n "$pids" ]; then
+            echo "$pids" | xargs kill -9 2>/dev/null && found=true
+        fi
+    fi
+
+    # 방법 4: /proc 기반 (최후의 수단)
+    if command -v netstat &> /dev/null; then
+        local pids=$(netstat -tlnp 2>/dev/null | grep ":${port}" | awk '{print $7}' | grep -oP '[0-9]+' | sort -u)
+        if [ -n "$pids" ]; then
+            echo "$pids" | xargs kill -9 2>/dev/null && found=true
+        fi
+    fi
+
+    return 0
+}
+
+# 포트가 사용 중인지 확인하는 함수
+is_port_in_use() {
+    local port=$1
+
+    # 방법 1: ss (가장 보편적)
+    if command -v ss &> /dev/null; then
+        ss -tln "sport = :${port}" 2>/dev/null | grep -q ":${port}" && return 0
+    fi
+
+    # 방법 2: fuser
+    if command -v fuser &> /dev/null; then
+        fuser ${port}/tcp > /dev/null 2>&1 && return 0
+    fi
+
+    # 방법 3: lsof
+    if command -v lsof &> /dev/null; then
+        lsof -ti:${port} > /dev/null 2>&1 && return 0
+    fi
+
+    # 방법 4: node로 직접 확인
+    if command -v node &> /dev/null; then
+        node -e "const s=require('net').createServer();s.once('error',()=>process.exit(1));s.listen(${port},'0.0.0.0',()=>{s.close();process.exit(0)})" 2>/dev/null
+        return $?
+    fi
+
+    return 1  # 사용 중이 아님
+}
+
 cleanup_ports() {
     print_step "Step 4: 포트 정리"
 
-    if command -v fuser &> /dev/null; then
-        fuser -k ${SERVER_PORT}/tcp > /dev/null 2>&1 || true
-        fuser -k ${CLIENT_PORT}/tcp > /dev/null 2>&1 || true
-    elif command -v lsof &> /dev/null; then
-        lsof -ti:${SERVER_PORT} | xargs kill -9 2>/dev/null || true
-        lsof -ti:${CLIENT_PORT} | xargs kill -9 2>/dev/null || true
-    else
-        print_info "포트 정리 도구 없음 (fuser/lsof) - 수동으로 확인해주세요"
-    fi
+    local ports=($SERVER_PORT $CLIENT_PORT)
 
-    # 포트가 해제될 때까지 대기
-    sleep 3
-
-    # 포트가 실제로 해제되었는지 확인
-    local port_ok=true
-    if command -v fuser &> /dev/null; then
-        if fuser ${SERVER_PORT}/tcp > /dev/null 2>&1; then
-            print_error "포트 ${SERVER_PORT}이 아직 사용 중입니다. 강제 종료합니다..."
-            fuser -k -9 ${SERVER_PORT}/tcp > /dev/null 2>&1 || true
+    for port in "${ports[@]}"; do
+        if is_port_in_use $port; then
+            print_info "포트 ${port} 사용 중 → 종료 시도..."
+            kill_port $port
             sleep 2
-        fi
-        if fuser ${CLIENT_PORT}/tcp > /dev/null 2>&1; then
-            print_error "포트 ${CLIENT_PORT}이 아직 사용 중입니다. 강제 종료합니다..."
-            fuser -k -9 ${CLIENT_PORT}/tcp > /dev/null 2>&1 || true
-            sleep 2
-        fi
-    fi
 
-    print_success "포트 ${SERVER_PORT}, ${CLIENT_PORT} 정리 완료"
+            # 재확인
+            if is_port_in_use $port; then
+                print_info "포트 ${port} 강제 종료 재시도 (SIGKILL)..."
+                kill_port $port
+                sleep 3
+
+                if is_port_in_use $port; then
+                    print_error "포트 ${port}을 해제할 수 없습니다!"
+                    print_info "수동으로 해제하세요: kill -9 \$(lsof -ti:${port}) 또는 fuser -k -9 ${port}/tcp"
+                    exit 1
+                fi
+            fi
+            print_success "포트 ${port} 정리 완료"
+        else
+            print_success "포트 ${port} 사용 가능"
+        fi
+    done
 }
 
 # ============================================================

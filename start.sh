@@ -1,9 +1,17 @@
 #!/bin/bash
 
-# Kill any existing processes on ports 3000 (Server) and 5173 (Client)
+# Kill any existing processes on ports 3000 and 18000
 echo "Cleaning up ports..."
-fuser -k 3000/tcp > /dev/null 2>&1
-fuser -k 18000/tcp > /dev/null 2>&1
+kill_port() {
+    local port=$1
+    command -v fuser &>/dev/null && fuser -k ${port}/tcp > /dev/null 2>&1 || true
+    command -v lsof &>/dev/null && lsof -ti:${port} 2>/dev/null | xargs kill -9 2>/dev/null || true
+    if command -v ss &>/dev/null; then
+        ss -tlnp "sport = :${port}" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | sort -u | xargs kill -9 2>/dev/null || true
+    fi
+}
+kill_port 3000
+kill_port 18000
 sleep 3
 
 echo "Starting Great Dalmuti Game..."

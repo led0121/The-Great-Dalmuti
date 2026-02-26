@@ -48,29 +48,55 @@ fi
 mkdir -p "$LOG_DIR"
 
 # ============================================================
-#  포트 정리
+#  포트 정리 함수
 # ============================================================
-echo -e "${YELLOW}🔧 포트 정리 중...${NC}"
-if command -v fuser &> /dev/null; then
-    fuser -k ${SERVER_PORT}/tcp > /dev/null 2>&1 || true
-    fuser -k ${CLIENT_PORT}/tcp > /dev/null 2>&1 || true
-elif command -v lsof &> /dev/null; then
-    lsof -ti:${SERVER_PORT} | xargs kill -9 2>/dev/null || true
-    lsof -ti:${CLIENT_PORT} | xargs kill -9 2>/dev/null || true
-fi
-sleep 3
+kill_port() {
+    local port=$1
+    if command -v fuser &> /dev/null; then
+        fuser -k ${port}/tcp > /dev/null 2>&1 || true
+    fi
+    if command -v lsof &> /dev/null; then
+        lsof -ti:${port} 2>/dev/null | xargs kill -9 2>/dev/null || true
+    fi
+    if command -v ss &> /dev/null; then
+        local pids=$(ss -tlnp "sport = :${port}" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | sort -u)
+        [ -n "$pids" ] && echo "$pids" | xargs kill -9 2>/dev/null || true
+    fi
+    if command -v netstat &> /dev/null; then
+        local pids=$(netstat -tlnp 2>/dev/null | grep ":${port}" | awk '{print $7}' | grep -oP '[0-9]+' | sort -u)
+        [ -n "$pids" ] && echo "$pids" | xargs kill -9 2>/dev/null || true
+    fi
+}
 
-# 포트가 아직 열려있으면 강제 종료
-if command -v fuser &> /dev/null; then
-    if fuser ${SERVER_PORT}/tcp > /dev/null 2>&1; then
-        fuser -k -9 ${SERVER_PORT}/tcp > /dev/null 2>&1 || true
-        sleep 2
+is_port_in_use() {
+    local port=$1
+    if command -v ss &> /dev/null; then
+        ss -tln "sport = :${port}" 2>/dev/null | grep -q ":${port}" && return 0
     fi
-    if fuser ${CLIENT_PORT}/tcp > /dev/null 2>&1; then
-        fuser -k -9 ${CLIENT_PORT}/tcp > /dev/null 2>&1 || true
-        sleep 2
+    if command -v fuser &> /dev/null; then
+        fuser ${port}/tcp > /dev/null 2>&1 && return 0
     fi
-fi
+    if command -v lsof &> /dev/null; then
+        lsof -ti:${port} > /dev/null 2>&1 && return 0
+    fi
+    if command -v node &> /dev/null; then
+        node -e "const s=require('net').createServer();s.once('error',()=>process.exit(1));s.listen(${port},'0.0.0.0',()=>{s.close();process.exit(0)})" 2>/dev/null
+        return $?
+    fi
+    return 1
+}
+
+echo -e "${YELLOW}🔧 포트 정리 중...${NC}"
+for port in $SERVER_PORT $CLIENT_PORT; do
+    if is_port_in_use $port; then
+        kill_port $port
+        sleep 2
+        if is_port_in_use $port; then
+            kill_port $port
+            sleep 3
+        fi
+    fi
+done
 
 # ============================================================
 #  서버 시작 (백그라운드)

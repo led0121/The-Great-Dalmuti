@@ -62,29 +62,32 @@ fi
 # ============================================================
 #  포트 기반 추가 정리 (혹시 남은 프로세스)
 # ============================================================
-if command -v fuser &> /dev/null; then
-    # 서버 포트
-    if fuser ${SERVER_PORT}/tcp > /dev/null 2>&1; then
-        fuser -k ${SERVER_PORT}/tcp > /dev/null 2>&1
-        echo -e "${GREEN}  ✅ 포트 ${SERVER_PORT} 정리됨${NC}"
+kill_port() {
+    local port=$1
+    local killed=false
+    if command -v fuser &> /dev/null; then
+        fuser -k ${port}/tcp > /dev/null 2>&1 && killed=true
+    fi
+    if command -v lsof &> /dev/null; then
+        lsof -ti:${port} 2>/dev/null | xargs kill -9 2>/dev/null && killed=true
+    fi
+    if command -v ss &> /dev/null; then
+        local pids=$(ss -tlnp "sport = :${port}" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | sort -u)
+        [ -n "$pids" ] && echo "$pids" | xargs kill -9 2>/dev/null && killed=true
+    fi
+    if command -v netstat &> /dev/null; then
+        local pids=$(netstat -tlnp 2>/dev/null | grep ":${port}" | awk '{print $7}' | grep -oP '[0-9]+' | sort -u)
+        [ -n "$pids" ] && echo "$pids" | xargs kill -9 2>/dev/null && killed=true
+    fi
+    $killed && return 0 || return 1
+}
+
+for port in $SERVER_PORT $CLIENT_PORT; do
+    if kill_port $port; then
+        echo -e "${GREEN}  ✅ 포트 ${port} 정리됨${NC}"
         KILLED=$((KILLED + 1))
     fi
-    # 클라이언트 포트
-    if fuser ${CLIENT_PORT}/tcp > /dev/null 2>&1; then
-        fuser -k ${CLIENT_PORT}/tcp > /dev/null 2>&1
-        echo -e "${GREEN}  ✅ 포트 ${CLIENT_PORT} 정리됨${NC}"
-        KILLED=$((KILLED + 1))
-    fi
-elif command -v lsof &> /dev/null; then
-    lsof -ti:${SERVER_PORT} | xargs kill -9 2>/dev/null && {
-        echo -e "${GREEN}  ✅ 포트 ${SERVER_PORT} 정리됨${NC}"
-        KILLED=$((KILLED + 1))
-    }
-    lsof -ti:${CLIENT_PORT} | xargs kill -9 2>/dev/null && {
-        echo -e "${GREEN}  ✅ 포트 ${CLIENT_PORT} 정리됨${NC}"
-        KILLED=$((KILLED + 1))
-    }
-fi
+done
 
 echo ""
 if [ $KILLED -gt 0 ]; then
