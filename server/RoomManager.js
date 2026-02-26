@@ -38,6 +38,7 @@ class RoomManager {
         } else {
             roomName = data.roomName || data;
             betAmount = parseInt(data.betAmount) || 0;
+            if (betAmount < 0) betAmount = 0;
         }
 
         const roomId = uuidv4().slice(0, 8);

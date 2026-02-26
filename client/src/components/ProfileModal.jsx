@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion'
 import { useLanguage } from '../LanguageContext'
 
@@ -50,6 +51,7 @@ export default function ProfileModal({ socket, isOpen, onClose }) {
 
     useEffect(() => {
         if (!isOpen) return
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLoading(true)
 
         socket.emit('get_profile', null, (data) => {
@@ -64,14 +66,14 @@ export default function ProfileModal({ socket, isOpen, onClose }) {
         socket.emit('get_leaderboard', { sortBy: leaderboardSort, limit: 15 }, (data) => {
             setLeaderboard(data || [])
         })
-    }, [isOpen])
+    }, [isOpen, leaderboardSort, socket])
 
     useEffect(() => {
         if (!isOpen) return
         socket.emit('get_leaderboard', { sortBy: leaderboardSort, limit: 15 }, (data) => {
             setLeaderboard(data || [])
         })
-    }, [leaderboardSort])
+    }, [leaderboardSort, isOpen, socket])
 
     // Listen for stats updates
     useEffect(() => {
@@ -82,7 +84,7 @@ export default function ProfileModal({ socket, isOpen, onClose }) {
         }
         socket.on('stats_update', handleStatsUpdate)
         return () => socket.off('stats_update', handleStatsUpdate)
-    }, [profile])
+    }, [profile, socket])
 
     if (!isOpen) return null
 
@@ -154,7 +156,7 @@ export default function ProfileModal({ socket, isOpen, onClose }) {
                                 {ko ? '불러오는 중...' : 'Loading...'}
                             </div>
                         ) : tab === 'stats' ? (
-                            <StatsTab stats={stats} ko={ko} profile={profile} />
+                            <StatsTab stats={stats} ko={ko} />
                         ) : tab === 'history' ? (
                             <HistoryTab history={history} ko={ko} />
                         ) : tab === 'settings' ? (
@@ -175,7 +177,7 @@ export default function ProfileModal({ socket, isOpen, onClose }) {
     )
 }
 
-function StatsTab({ stats, ko, profile }) {
+function StatsTab({ stats, ko }) {
     if (!stats) return <div className="text-gray-500 text-center py-8">{ko ? '데이터가 없습니다' : 'No data'}</div>
 
     const winRate = stats.winRate || '0.0'

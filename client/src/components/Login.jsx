@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useLanguage } from '../LanguageContext'
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion'
 import ForgotModal from './ForgotModal'
 
