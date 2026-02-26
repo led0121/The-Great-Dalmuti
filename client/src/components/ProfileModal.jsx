@@ -6,14 +6,18 @@ const GAME_ICONS = {
     dalmuti: '👑',
     onecard: '🃏',
     blackjack: '🂡',
-    poker: '♠️'
+    poker: '♠️',
+    slot: '🍒',
+    roulette: '🎡'
 }
 
 const GAME_LABELS = {
     dalmuti: { ko: '달무티', en: 'Dalmuti' },
     onecard: { ko: '원카드', en: 'OneCard' },
     blackjack: { ko: '블랙잭', en: 'Blackjack' },
-    poker: { ko: '포커', en: 'Poker' }
+    poker: { ko: '포커', en: 'Poker' },
+    slot: { ko: '슬롯머신', en: 'Slot' },
+    roulette: { ko: '룰렛', en: 'Roulette' }
 }
 
 const RESULT_COLORS = {
@@ -127,7 +131,8 @@ export default function ProfileModal({ socket, isOpen, onClose }) {
                         {[
                             { key: 'stats', label: ko ? '📊 전적' : '📊 Stats' },
                             { key: 'history', label: ko ? '📜 기록' : '📜 History' },
-                            { key: 'leaderboard', label: ko ? '🏆 랭킹' : '🏆 Ranking' }
+                            { key: 'leaderboard', label: ko ? '🏆 랭킹' : '🏆 Ranking' },
+                            { key: 'settings', label: ko ? '⚙️ 설정' : '⚙️ Setting' }
                         ].map(t => (
                             <button
                                 key={t.key}
@@ -152,6 +157,8 @@ export default function ProfileModal({ socket, isOpen, onClose }) {
                             <StatsTab stats={stats} ko={ko} profile={profile} />
                         ) : tab === 'history' ? (
                             <HistoryTab history={history} ko={ko} />
+                        ) : tab === 'settings' ? (
+                            <SettingsTab socket={socket} ko={ko} profile={profile} onClose={onClose} />
                         ) : (
                             <LeaderboardTab
                                 leaderboard={leaderboard}
@@ -437,5 +444,83 @@ function LeaderboardTab({ leaderboard, sortBy, onSortChange, ko, myId }) {
                 )}
             </div>
         </div>
+    )
+}
+
+function SettingsTab({ socket, ko, profile, onClose }) {
+    const [newDisplayName, setNewDisplayName] = useState(profile?.displayName || '')
+    const [currentPassword, setCurrentPassword] = useState('')
+    const [newPassword, setNewPassword] = useState('')
+    const [errorMsg, setErrorMsg] = useState('')
+    const [successMsg, setSuccessMsg] = useState('')
+
+    const handleSubmit = (e) => {
+        e.preventDefault()
+        setErrorMsg('')
+        setSuccessMsg('')
+
+        if (!currentPassword) {
+            return setErrorMsg(ko ? '현재 비밀번호를 입력해주세요' : 'Enter current password')
+        }
+
+        socket.emit('auth_update_account', {
+            newDisplayName: newDisplayName !== profile?.displayName ? newDisplayName : null,
+            currentPassword,
+            newPassword: newPassword || null
+        }, (res) => {
+            if (res.success) {
+                setSuccessMsg(ko ? '계정 정보가 변경되었습니다' : 'Account updated')
+                setCurrentPassword('')
+                setNewPassword('')
+                // Wait briefly, then close or refresh
+                setTimeout(onClose, 1500)
+            } else {
+                setErrorMsg(res.error)
+            }
+        })
+    }
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4 max-w-sm mx-auto p-4 bg-gray-900 border border-gray-700/50 rounded-xl">
+            <h3 className="font-black text-xl mb-4 text-purple-400">⚙️ {ko ? '설정' : 'Settings'}</h3>
+
+            <div>
+                <label className="block text-xs text-gray-400 mb-1">{ko ? '새로운 닉네임 (원치 않으면 공란)' : 'New Display Name'}</label>
+                <input
+                    type="text"
+                    value={newDisplayName}
+                    onChange={e => setNewDisplayName(e.target.value)}
+                    className="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white outline-none focus:border-purple-500"
+                    placeholder={profile?.displayName}
+                />
+            </div>
+
+            <div>
+                <label className="block text-xs text-gray-400 mb-1">{ko ? '새로운 비밀번호 (원치 않으면 공란)' : 'New Password'}</label>
+                <input
+                    type="password"
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    className="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white outline-none focus:border-purple-500"
+                />
+            </div>
+
+            <div className="pt-2">
+                <label className="block text-xs text-red-300 mb-1 font-bold">{ko ? '현재 비밀번호 (필수)' : 'Current Password (Required)'}</label>
+                <input
+                    type="password"
+                    value={currentPassword}
+                    onChange={e => setCurrentPassword(e.target.value)}
+                    className="w-full px-4 py-2 bg-gray-800 border border-red-900/50 rounded-lg text-white outline-none focus:border-red-500"
+                />
+            </div>
+
+            <button type="submit" className="w-full mt-4 bg-purple-600 hover:bg-purple-500 py-3 rounded-lg font-bold transition-all text-white">
+                {ko ? '변경 사항 저장' : 'Save Changes'}
+            </button>
+
+            {errorMsg && <div className="text-sm text-red-400 mt-2 bg-red-900/20 p-2 rounded">{errorMsg}</div>}
+            {successMsg && <div className="text-sm text-green-400 mt-2 bg-green-900/20 p-2 rounded">{successMsg}</div>}
+        </form>
     )
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useLanguage } from '../LanguageContext'
 import { motion, AnimatePresence } from 'framer-motion'
+import ForgotModal from './ForgotModal'
 
 export default function Login({ onLogin, socket }) {
     const [mode, setMode] = useState('login') // 'login' or 'register'
@@ -9,6 +10,7 @@ export default function Login({ onLogin, socket }) {
     const [displayName, setDisplayName] = useState('')
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
+    const [isForgotOpen, setIsForgotOpen] = useState(false)
     const { language } = useLanguage()
 
     const ko = language === 'ko'
@@ -180,14 +182,22 @@ export default function Login({ onLogin, socket }) {
                 </form>
 
                 {/* Info */}
-                <div className="px-6 pb-4">
-                    <div className="text-center text-xs text-gray-600">
+                <div className="px-6 pb-4 flex justify-between items-center text-xs text-gray-500">
+                    <button
+                        onClick={() => setIsForgotOpen(true)}
+                        className="hover:text-amber-400 transition-colors underline"
+                    >
+                        {ko ? '아이디/비밀번호 찾기' : 'Forgot Account?'}
+                    </button>
+                    <div>
                         {ko
-                            ? '가입 시 매일 오전 12시 10,000 게임 머니가 지급됩니다'
-                            : 'New accounts receive 10,000 coins, refilled daily at midnight'}
+                            ? '매일 자정 10,000 머니 지급'
+                            : 'Daily refill 10,000'}
                     </div>
                 </div>
             </motion.div>
+
+            <ForgotModal isOpen={isForgotOpen} onClose={() => setIsForgotOpen(false)} socket={socket} />
         </div>
     )
 }

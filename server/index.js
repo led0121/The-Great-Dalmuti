@@ -88,6 +88,26 @@ io.on('connection', (socket) => {
         if (callback) callback(result);
     });
 
+    socket.on('auth_find_account', ({ displayName }, callback) => {
+        const result = userDB.findAccount(displayName);
+        if (callback) callback(result);
+    });
+
+    socket.on('auth_reset_password', ({ username, displayName, newPassword }, callback) => {
+        const result = userDB.resetPassword(username, displayName, newPassword);
+        if (callback) callback(result);
+    });
+
+    socket.on('auth_update_account', ({ newDisplayName, currentPassword, newPassword }, callback) => {
+        if (!socket.data.userId) return callback({ success: false, error: 'Not logged in' });
+        const result = userDB.updateAccount(socket.data.userId, newDisplayName, currentPassword, newPassword);
+        if (result.success) {
+            socket.data.displayName = result.user.displayName;
+            socket.data.username = result.user.displayName;
+        }
+        if (callback) callback(result);
+    });
+
     socket.on('get_balance', (_, callback) => {
         if (socket.data.userId) {
             const balance = userDB.getBalance(socket.data.userId);
@@ -157,7 +177,7 @@ io.on('connection', (socket) => {
                 else payout = validBet * 5;
                 resultData.message = 'JACKPOT';
             } else if (reel1 === reel2 || reel2 === reel3 || reel1 === reel3) {
-                payout = Math.floor(validBet * 1.5);
+                payout = validBet; // 1x payout (just money back for 2 matching) to cap player EV at 84%
                 resultData.message = 'MINOR';
             } else {
                 payout = 0;
@@ -186,16 +206,14 @@ io.on('connection', (socket) => {
             userDB.addBalance(socket.data.userId, payout);
         }
 
-        // Add to stats (we simulate a gameResult structure but use special gameType)
-        userDB.updateStats(
-            socket.data.userId,
-            { gameType: gameType, result: payout > validBet ? 'win' : payout === validBet ? 'draw' : 'lose', netGain: payout - validBet },
-            payout > validBet,
-            payout === validBet,
-            payout < validBet,
-            payout,
-            validBet
-        );
+        // Add to stats
+        userDB.recordGameResult(socket.data.userId, {
+            gameType: gameType,
+            result: payout > validBet ? 'win' : payout === validBet ? 'draw' : 'lose',
+            earnings: payout,
+            spent: validBet,
+            details: resultData
+        });
 
         const newBalance = userDB.getBalance(socket.data.userId);
 

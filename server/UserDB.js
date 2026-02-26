@@ -151,6 +151,62 @@ class UserDB {
         }
     }
 
+    findAccount(displayName) {
+        if (!displayName || displayName.trim().length === 0) return { success: false, error: '이름을 입력해주세요' };
+
+        const matches = [];
+        for (const [id, user] of Object.entries(this.users)) {
+            if (user.displayName.trim() === displayName.trim()) {
+                let un = user.username;
+                let masked = un.length > 2 ? un.substring(0, 2) + '*'.repeat(un.length - 2) : un[0] + '*';
+                matches.push({ maskedUsername: masked });
+            }
+        }
+
+        if (matches.length === 0) return { success: false, error: '일치하는 계정 정보가 없습니다' };
+        return { success: true, accounts: matches };
+    }
+
+    resetPassword(username, displayName, newPassword) {
+        if (!username || !displayName) return { success: false, error: '모든 필드를 입력하세요' };
+        const id = username.toLowerCase().trim();
+        const user = this.users[id];
+
+        if (!user || user.displayName !== displayName.trim()) {
+            return { success: false, error: '등록된 정보가 일치하지 않습니다' };
+        }
+        if (newPassword.length < 4) {
+            return { success: false, error: '새 비밀번호는 4자 이상이어야 합니다' };
+        }
+
+        const salt = bcrypt.genSaltSync(10);
+        user.passwordHash = bcrypt.hashSync(newPassword, salt);
+        this.save();
+        return { success: true };
+    }
+
+    updateAccount(userId, newDisplayName, currentPassword, newPassword) {
+        const user = this.users[userId];
+        if (!user) return { success: false, error: '유저정보를 찾을 수 없습니다' };
+
+        if (!currentPassword || !bcrypt.compareSync(currentPassword, user.passwordHash)) {
+            return { success: false, error: '현재 비밀번호가 일치하지 않습니다' };
+        }
+
+        if (newDisplayName && newDisplayName.trim().length >= 2) {
+            user.displayName = newDisplayName.trim().substring(0, 16);
+        }
+
+        if (newPassword) {
+            if (newPassword.length < 4) return { success: false, error: '새 비밀번호는 4자 이상이어야 합니다' };
+            const salt = bcrypt.genSaltSync(10);
+            user.passwordHash = bcrypt.hashSync(newPassword, salt);
+        }
+
+        this.save();
+        return { success: true, user: this.getPublicUser(userId) };
+    }
+
     getBalance(userId) {
         const user = this.users[userId];
         if (!user) return 0;
