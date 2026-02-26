@@ -99,6 +99,13 @@ class UserDB {
             return { success: false, error: '이미 존재하는 아이디입니다' };
         }
 
+        // Check for duplicate displayName
+        const trimmedName = displayName.trim();
+        const isDuplicateName = Object.values(this.users).some(u => u.displayName.toLowerCase() === trimmedName.toLowerCase());
+        if (isDuplicateName) {
+            return { success: false, error: '이미 사용 중인 이름(닉네임)입니다' };
+        }
+
         const salt = bcrypt.genSaltSync(10);
         const hash = bcrypt.hashSync(password, salt);
         const now = new Date().toISOString().split('T')[0];
@@ -194,7 +201,17 @@ class UserDB {
         }
 
         if (newDisplayName && newDisplayName.trim().length >= 2) {
-            user.displayName = newDisplayName.trim().substring(0, 16);
+            const trimmedNewName = newDisplayName.trim().substring(0, 16);
+            if (trimmedNewName !== user.displayName) {
+                // Check if someone else is already using this display name
+                const isDuplicateName = Object.values(this.users).some(u =>
+                    u.id !== userId && u.displayName.toLowerCase() === trimmedNewName.toLowerCase()
+                );
+                if (isDuplicateName) {
+                    return { success: false, error: '이미 사용 중인 이름(닉네임)입니다' };
+                }
+                user.displayName = trimmedNewName;
+            }
         }
 
         if (newPassword) {
