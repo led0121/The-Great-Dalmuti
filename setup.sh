@@ -4,7 +4,8 @@
 #  설치 → 빌드 → 서버 시작 → 클라이언트 시작
 # ============================================================
 
-set -e  # 에러 발생 시 즉시 중단
+# pipefail: 파이프라인 에러도 감지
+set -eo pipefail
 
 # 색상 코드
 RED='\033[0;31m'
@@ -13,7 +14,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 BOLD='\033[1m'
 
 # 프로젝트 루트 디렉토리 (이 스크립트가 위치한 곳)
@@ -61,7 +62,6 @@ print_error() {
 check_prerequisites() {
     print_step "Step 0: 사전 요구 사항 확인"
 
-    # Node.js 확인
     if ! command -v node &> /dev/null; then
         print_error "Node.js가 설치되어 있지 않습니다!"
         echo -e "  ${YELLOW}설치 방법:${NC}"
@@ -72,7 +72,6 @@ check_prerequisites() {
     NODE_VERSION=$(node -v)
     print_success "Node.js: ${NODE_VERSION}"
 
-    # npm 확인
     if ! command -v npm &> /dev/null; then
         print_error "npm이 설치되어 있지 않습니다!"
         exit 1
@@ -80,7 +79,6 @@ check_prerequisites() {
     NPM_VERSION=$(npm -v)
     print_success "npm: v${NPM_VERSION}"
 
-    # git 확인 (선택사항)
     if command -v git &> /dev/null; then
         GIT_VERSION=$(git --version | awk '{print $3}')
         print_success "git: v${GIT_VERSION}"
@@ -97,16 +95,18 @@ install_server() {
 
     cd "$PROJECT_DIR/server"
 
-    # node_modules가 이미 있으면 확인
     if [ -d "node_modules" ]; then
         print_info "기존 node_modules 발견 → 재설치합니다"
-        rm -rf node_modules
+        rm -rf node_modules package-lock.json
     fi
 
-    npm install --no-optional 2>&1 | tail -5
-    print_success "서버 패키지 설치 완료"
+    if npm install 2>&1; then
+        print_success "서버 패키지 설치 완료"
+    else
+        print_error "서버 패키지 설치 실패!"
+        exit 1
+    fi
 
-    # 데이터 폴더 생성
     mkdir -p "$PROJECT_DIR/server/data"
     print_success "데이터 디렉토리 준비 완료 (server/data/)"
 }
@@ -121,11 +121,22 @@ install_client() {
 
     if [ -d "node_modules" ]; then
         print_info "기존 node_modules 발견 → 재설치합니다"
-        rm -rf node_modules
+        rm -rf node_modules package-lock.json
     fi
 
-    npm install 2>&1 | tail -5
-    print_success "클라이언트 패키지 설치 완료"
+    # --legacy-peer-deps: Node 18 등에서 의존성 충돌 방지
+    if npm install --legacy-peer-deps 2>&1; then
+        print_success "클라이언트 패키지 설치 완료"
+    else
+        print_error "클라이언트 패키지 설치 실패!"
+        print_info "재시도: npm install --force"
+        if npm install --force 2>&1; then
+            print_success "클라이언트 패키지 설치 완료 (--force)"
+        else
+            print_error "클라이언트 패키지 설치 실패! 수동 설치가 필요합니다."
+            exit 1
+        fi
+    fi
 }
 
 # ============================================================
@@ -135,8 +146,19 @@ build_client() {
     print_step "Step 3: 클라이언트 빌드 확인"
 
     cd "$PROJECT_DIR/client"
-    npx vite build 2>&1 | tail -5
-    print_success "클라이언트 빌드 완료"
+
+    # vite가 설치되어 있는지 확인
+    if [ ! -f "node_modules/.bin/vite" ]; then
+        print_error "vite가 설치되지 않았습니다! Step 2를 다시 확인해주세요."
+        exit 1
+    fi
+
+    if npx vite build 2>&1; then
+        print_success "클라이언트 빌드 완료"
+    else
+        print_error "빌드 실패!"
+        exit 1
+    fi
 }
 
 # ============================================================
@@ -148,14 +170,32 @@ cleanup_ports() {
     if command -v fuser &> /dev/null; then
         fuser -k ${SERVER_PORT}/tcp > /dev/null 2>&1 || true
         fuser -k ${CLIENT_PORT}/tcp > /dev/null 2>&1 || true
-        print_success "포트 ${SERVER_PORT}, ${CLIENT_PORT} 정리 완료"
     elif command -v lsof &> /dev/null; then
         lsof -ti:${SERVER_PORT} | xargs kill -9 2>/dev/null || true
         lsof -ti:${CLIENT_PORT} | xargs kill -9 2>/dev/null || true
-        print_success "포트 ${SERVER_PORT}, ${CLIENT_PORT} 정리 완료"
     else
         print_info "포트 정리 도구 없음 (fuser/lsof) - 수동으로 확인해주세요"
     fi
+
+    # 포트가 해제될 때까지 대기
+    sleep 3
+
+    # 포트가 실제로 해제되었는지 확인
+    local port_ok=true
+    if command -v fuser &> /dev/null; then
+        if fuser ${SERVER_PORT}/tcp > /dev/null 2>&1; then
+            print_error "포트 ${SERVER_PORT}이 아직 사용 중입니다. 강제 종료합니다..."
+            fuser -k -9 ${SERVER_PORT}/tcp > /dev/null 2>&1 || true
+            sleep 2
+        fi
+        if fuser ${CLIENT_PORT}/tcp > /dev/null 2>&1; then
+            print_error "포트 ${CLIENT_PORT}이 아직 사용 중입니다. 강제 종료합니다..."
+            fuser -k -9 ${CLIENT_PORT}/tcp > /dev/null 2>&1 || true
+            sleep 2
+        fi
+    fi
+
+    print_success "포트 ${SERVER_PORT}, ${CLIENT_PORT} 정리 완료"
 }
 
 # ============================================================
@@ -166,20 +206,30 @@ start_app() {
 
     # 서버 시작
     cd "$PROJECT_DIR/server"
-    npm start &
+    node index.js &
     SERVER_PID=$!
-    print_success "서버 시작 (PID: ${SERVER_PID}, 포트: ${SERVER_PORT})"
-
-    # 서버 초기화 대기
     sleep 2
+
+    # 서버가 살아있는지 확인
+    if ! kill -0 $SERVER_PID 2>/dev/null; then
+        print_error "서버 시작 실패! 로그를 확인해주세요."
+        exit 1
+    fi
+    print_success "서버 시작 (PID: ${SERVER_PID}, 포트: ${SERVER_PORT})"
 
     # 클라이언트 시작
     cd "$PROJECT_DIR/client"
-    HOST=0.0.0.0 npm run dev -- --host --port ${CLIENT_PORT} &
+    HOST=0.0.0.0 npx vite --host --port ${CLIENT_PORT} &
     CLIENT_PID=$!
-    print_success "클라이언트 시작 (PID: ${CLIENT_PID}, 포트: ${CLIENT_PORT})"
-
     sleep 2
+
+    # 클라이언트가 살아있는지 확인
+    if ! kill -0 $CLIENT_PID 2>/dev/null; then
+        print_error "클라이언트 시작 실패! 로그를 확인해주세요."
+        kill $SERVER_PID 2>/dev/null || true
+        exit 1
+    fi
+    print_success "클라이언트 시작 (PID: ${CLIENT_PID}, 포트: ${CLIENT_PORT})"
 
     # LAN IP 주소 가져오기
     LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
@@ -212,7 +262,6 @@ start_app() {
         echo -e "${YELLOW}🛑 서버를 종료합니다...${NC}"
         kill $SERVER_PID 2>/dev/null
         kill $CLIENT_PID 2>/dev/null
-        # 자식 프로세스도 정리
         pkill -P $SERVER_PID 2>/dev/null || true
         pkill -P $CLIENT_PID 2>/dev/null || true
         echo -e "${GREEN}✅ 종료 완료${NC}"

@@ -58,7 +58,19 @@ elif command -v lsof &> /dev/null; then
     lsof -ti:${SERVER_PORT} | xargs kill -9 2>/dev/null || true
     lsof -ti:${CLIENT_PORT} | xargs kill -9 2>/dev/null || true
 fi
-sleep 1
+sleep 3
+
+# 포트가 아직 열려있으면 강제 종료
+if command -v fuser &> /dev/null; then
+    if fuser ${SERVER_PORT}/tcp > /dev/null 2>&1; then
+        fuser -k -9 ${SERVER_PORT}/tcp > /dev/null 2>&1 || true
+        sleep 2
+    fi
+    if fuser ${CLIENT_PORT}/tcp > /dev/null 2>&1; then
+        fuser -k -9 ${CLIENT_PORT}/tcp > /dev/null 2>&1 || true
+        sleep 2
+    fi
+fi
 
 # ============================================================
 #  서버 시작 (백그라운드)
@@ -67,10 +79,16 @@ echo -e "${CYAN}🚀 서버 시작 중...${NC}"
 cd "$PROJECT_DIR/server"
 nohup node index.js > "$LOG_DIR/server.log" 2>&1 &
 SERVER_PID=$!
-echo -e "${GREEN}  ✅ 서버 시작됨 (PID: ${SERVER_PID})${NC}"
+sleep 3
 
-# 서버 초기화 대기
-sleep 2
+# 서버가 정상 시작되었는지 확인
+if ! kill -0 $SERVER_PID 2>/dev/null; then
+    echo -e "${RED}  ❌ 서버 시작 실패! 로그를 확인하세요: $LOG_DIR/server.log${NC}"
+    cat "$LOG_DIR/server.log" 2>/dev/null | tail -10
+    rm -f "$PID_FILE"
+    exit 1
+fi
+echo -e "${GREEN}  ✅ 서버 시작됨 (PID: ${SERVER_PID})${NC}"
 
 # ============================================================
 #  클라이언트 시작 (백그라운드)

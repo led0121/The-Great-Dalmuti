@@ -4,6 +4,7 @@
 echo "Cleaning up ports..."
 fuser -k 3000/tcp > /dev/null 2>&1
 fuser -k 18000/tcp > /dev/null 2>&1
+sleep 3
 
 echo "Starting Great Dalmuti Game..."
 
