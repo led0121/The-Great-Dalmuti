@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import PatchNotes from './PatchNotes'
 import RulesModal from './RulesModal'
+import ProfileModal from './ProfileModal'
+import MiniGamesModal from './MiniGamesModal'
 import { useLanguage } from '../LanguageContext'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -9,6 +11,8 @@ export default function Lobby({ username, userInfo, roomList, onCreateRoom, onJo
     const [roomIdToJoin, setRoomIdToJoin] = useState('')
     const [betAmount, setBetAmount] = useState(0)
     const [isRulesOpen, setIsRulesOpen] = useState(false)
+    const [isProfileOpen, setIsProfileOpen] = useState(false)
+    const [isMiniGamesOpen, setIsMiniGamesOpen] = useState(false)
     const { language } = useLanguage()
     const ko = language === 'ko'
 
@@ -42,7 +46,10 @@ export default function Lobby({ username, userInfo, roomList, onCreateRoom, onJo
         <div className="flex flex-col gap-4 w-full max-w-7xl h-[90vh] p-4">
             {/* Top Bar: User Info + Online Count */}
             <div className="flex items-center justify-between bg-gray-800/80 backdrop-blur rounded-2xl px-6 py-3 border border-gray-700/50 shadow-lg">
-                <div className="flex items-center gap-4">
+                <div
+                    onClick={() => setIsProfileOpen(true)}
+                    className="flex items-center gap-4 cursor-pointer hover:bg-gray-700/50 p-2 -ml-2 rounded-xl transition-colors"
+                >
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white font-black text-lg shadow-lg">
                         {(userInfo?.displayName || username)?.[0]?.toUpperCase()}
                     </div>
@@ -71,6 +78,14 @@ export default function Lobby({ username, userInfo, roomList, onCreateRoom, onJo
                             {onlineCount || 0} {ko ? '명 접속중' : 'online'}
                         </span>
                     </div>
+
+                    {/* Mini Games btn */}
+                    <button
+                        onClick={() => setIsMiniGamesOpen(true)}
+                        className="bg-purple-700 hover:bg-purple-600 transition-colors px-3 py-2 rounded-full text-white text-sm font-bold"
+                    >
+                        🎰 {ko ? '미니 게임' : 'Mini Games'}
+                    </button>
 
                     {/* How to play btn */}
                     <button
@@ -235,6 +250,8 @@ export default function Lobby({ username, userInfo, roomList, onCreateRoom, onJo
             </div>
 
             <RulesModal isOpen={isRulesOpen} onClose={() => setIsRulesOpen(false)} />
+            <MiniGamesModal isOpen={isMiniGamesOpen} onClose={() => setIsMiniGamesOpen(false)} socket={socket} />
+            {isProfileOpen && <ProfileModal socket={socket} isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />}
         </div>
     )
 }

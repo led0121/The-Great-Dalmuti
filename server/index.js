@@ -123,6 +123,102 @@ io.on('connection', (socket) => {
         if (callback) callback(leaderboard);
     });
 
+    socket.on('play_minigame', ({ gameType, betAmount, extraData }, callback) => {
+        if (!socket.data.userId) {
+            if (callback) callback({ success: false, error: 'Not logged in' });
+            return;
+        }
+
+        const validBet = parseInt(betAmount);
+        if (isNaN(validBet) || validBet <= 0) {
+            if (callback) callback({ success: false, error: 'Invalid bet' });
+            return;
+        }
+
+        if (!userDB.deductBalance(socket.data.userId, validBet)) {
+            if (callback) callback({ success: false, error: 'Insufficient funds' });
+            return;
+        }
+
+        let payout = 0;
+        let resultData = {};
+
+        if (gameType === 'slot') {
+            const symbols = ['🍒', '🍋', '🔔', '💎', '7️⃣'];
+            const reel1 = symbols[Math.floor(Math.random() * symbols.length)];
+            const reel2 = symbols[Math.floor(Math.random() * symbols.length)];
+            const reel3 = symbols[Math.floor(Math.random() * symbols.length)];
+
+            resultData.reels = [reel1, reel2, reel3];
+
+            if (reel1 === reel2 && reel2 === reel3) {
+                if (reel1 === '7️⃣') payout = validBet * 20;
+                else if (reel1 === '💎') payout = validBet * 10;
+                else payout = validBet * 5;
+                resultData.message = 'JACKPOT';
+            } else if (reel1 === reel2 || reel2 === reel3 || reel1 === reel3) {
+                payout = Math.floor(validBet * 1.5);
+                resultData.message = 'MINOR';
+            } else {
+                payout = 0;
+                resultData.message = 'LOSE';
+            }
+        } else if (gameType === 'roulette') {
+            const num = Math.floor(Math.random() * 15); // 0=green, 1-7=red, 8-14=black
+            let color = 'green';
+            if (num >= 1 && num <= 7) color = 'red';
+            if (num >= 8 && num <= 14) color = 'black';
+
+            resultData.number = num;
+            resultData.color = color;
+
+            const predictedColor = extraData?.color;
+            if (predictedColor === color) {
+                payout = color === 'green' ? validBet * 14 : validBet * 2;
+                resultData.message = 'WIN';
+            } else {
+                payout = 0;
+                resultData.message = 'LOSE';
+            }
+        }
+
+        if (payout > 0) {
+            userDB.addBalance(socket.data.userId, payout);
+        }
+
+        // Add to stats (we simulate a gameResult structure but use special gameType)
+        userDB.updateStats(
+            socket.data.userId,
+            { gameType: gameType, result: payout > validBet ? 'win' : payout === validBet ? 'draw' : 'lose', netGain: payout - validBet },
+            payout > validBet,
+            payout === validBet,
+            payout < validBet,
+            payout,
+            validBet
+        );
+
+        const newBalance = userDB.getBalance(socket.data.userId);
+
+        // Notify user of new balance
+        socket.emit('balance_update', { balance: newBalance });
+        // Also inform all sockets of this user (if multiple)
+        const allSockets = Array.from(io.sockets.sockets.values());
+        for (const s of allSockets) {
+            if (s.data.userId === socket.data.userId && s.id !== socket.id) {
+                s.emit('balance_update', { balance: newBalance });
+            }
+        }
+
+        if (callback) {
+            callback({
+                success: true,
+                payout,
+                resultData,
+                newBalance
+            });
+        }
+    });
+
     // Legacy login (still works for backward compat)
     socket.on('login', (username) => {
         const safeName = (username || 'Guest').trim().substring(0, 16);
