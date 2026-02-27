@@ -70,7 +70,7 @@ class PokerGame {
             p.hand = [];
             p.bet = 0;
             p.totalBet = 0;
-            p.folded = false;
+            p.folded = p.balance <= 0;
             p.allIn = false;
             p.result = null;
             p.isDealer = false;
@@ -216,6 +216,7 @@ class PokerGame {
     check(playerId) {
         const player = this.players[this.currentPlayerIndex];
         if (!player || player.id !== playerId) return false;
+        if (this.phase === 'WAITING' || this.phase === 'SHOWDOWN') return false;
         if (player.bet < this.currentBet) return false; // Can't check if there's a bet to match
 
         this.actedThisRound.add(playerId);
@@ -253,6 +254,7 @@ class PokerGame {
     allInAction(playerId) {
         const player = this.players[this.currentPlayerIndex];
         if (!player || player.id !== playerId) return false;
+        if (this.phase === 'WAITING' || this.phase === 'SHOWDOWN') return false;
 
         const allInAmount = player.balance;
         const newBet = player.bet + allInAmount;
@@ -403,34 +405,71 @@ class PokerGame {
             return 0;
         });
 
-        // Distribute pot - simple version (no side pots for now)
-        const winner = evaluated[0];
-        const tiedWinners = evaluated.filter(e => {
-            if (e.handRank.rank !== winner.handRank.rank) return false;
-            for (let i = 0; i < e.handRank.kickers.length; i++) {
-                if (e.handRank.kickers[i] !== winner.handRank.kickers[i]) return false;
+        // Distribute pot using side pots logic
+        const betLevels = [...new Set(contenders.filter(c => c.totalBet > 0).map(c => c.totalBet))].sort((x, y) => x - y);
+        let previousLevel = 0;
+        const payouts = new Map();
+
+        for (const p of this.players) p.result = 'lose';
+
+        for (const level of betLevels) {
+            const levelContribution = level - previousLevel;
+            let subPot = 0;
+
+            for (const p of this.players) {
+                if (p.totalBet > previousLevel) {
+                    subPot += Math.min(p.totalBet - previousLevel, levelContribution);
+                }
             }
-            return true;
-        });
 
-        const share = Math.floor(this.pot / tiedWinners.length);
-        this.roundResults = [];
+            const eligible = evaluated.filter(e => e.player.totalBet >= level);
+            if (eligible.length > 0 && subPot > 0) {
+                const best = eligible[0];
+                const tied = eligible.filter(e => {
+                    if (e.handRank.rank !== best.handRank.rank) return false;
+                    for (let i = 0; i < e.handRank.kickers.length; i++) {
+                        if (e.handRank.kickers[i] !== best.handRank.kickers[i]) return false;
+                    }
+                    return true;
+                });
 
-        for (const e of evaluated) {
-            const isWinner = tiedWinners.includes(e);
-            const payout = isWinner ? share : 0;
-            e.player.result = isWinner ? 'win' : 'lose';
-            if (isWinner) e.player.balance += payout;
+                const share = Math.floor(subPot / tied.length);
+                let remainder = subPot % tied.length;
 
-            this.roundResults.push({
+                tied.forEach(winner => {
+                    winner.player.result = 'win';
+                    let amt = share;
+                    if (remainder > 0) {
+                        amt += 1;
+                        remainder -= 1;
+                    }
+                    winner.player.balance += amt;
+                    payouts.set(winner.player.id, (payouts.get(winner.player.id) || 0) + amt);
+                });
+            }
+            previousLevel = level;
+        }
+
+        // Remainder logic if any unawarded chips exist
+        let totalDistributed = 0;
+        for (const amt of payouts.values()) totalDistributed += amt;
+        const remainingPot = this.pot - totalDistributed;
+        if (remainingPot > 0 && evaluated.length > 0) {
+            evaluated[0].player.balance += remainingPot;
+            payouts.set(evaluated[0].player.id, (payouts.get(evaluated[0].player.id) || 0) + remainingPot);
+        }
+
+        this.roundResults = evaluated.map(e => {
+            const payout = payouts.get(e.player.id) || 0;
+            return {
                 playerId: e.player.id,
                 username: e.player.displayName || e.player.username,
                 payout,
                 handRank: e.handRank.name,
-                result: isWinner ? 'win' : 'lose',
+                result: payout > 0 ? 'win' : 'lose',
                 hand: e.player.hand
-            });
-        }
+            };
+        });
 
         this.pot = 0;
         this.broadcastState();

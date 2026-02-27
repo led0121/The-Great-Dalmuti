@@ -192,7 +192,21 @@ class RoomManager {
 
         } else if (gameType === 'poker') {
             room.game = new PokerGame(playersWithBalance, (gameState) => {
-                this.io.to(roomId).emit('game_update', gameState);
+                const playingPlayerIds = new Set(gameState.players.map(p => p.id));
+                const allSockets = Array.from(this.io.sockets.sockets.values()).filter(s => s.data.roomId === roomId);
+
+                for (const socket of allSockets) {
+                    const playerState = JSON.parse(JSON.stringify(gameState));
+                    if (gameState.phase !== 'SHOWDOWN') {
+                        playerState.players.forEach(p => {
+                            // Mask cards for others
+                            if (p.id !== socket.id) {
+                                p.hand = p.hand.map(c => ({ ...c, id: 'hidden', suit: 'hidden', rank: 'hidden' }));
+                            }
+                        });
+                    }
+                    socket.emit('game_update', playerState);
+                }
             }, room.settings);
             room.game.start();
 
@@ -557,7 +571,18 @@ class RoomManager {
                     displayName: p.username
                 }));
                 room.game = new PokerGame(playersWithBalance, (gameState) => {
-                    this.io.to(roomId).emit('game_update', gameState);
+                    const allSockets = Array.from(this.io.sockets.sockets.values()).filter(s => s.data.roomId === roomId);
+                    for (const socket of allSockets) {
+                        const playerState = JSON.parse(JSON.stringify(gameState));
+                        if (gameState.phase !== 'SHOWDOWN') {
+                            playerState.players.forEach(p => {
+                                if (p.id !== socket.id) {
+                                    p.hand = p.hand.map(c => ({ ...c, id: 'hidden', suit: 'hidden', rank: 'hidden' }));
+                                }
+                            });
+                        }
+                        socket.emit('game_update', playerState);
+                    }
                 }, room.settings);
                 room.game.start();
             } else {
