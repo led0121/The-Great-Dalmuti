@@ -466,11 +466,16 @@ class RoomManager {
                         // blackjack: payout=bet*2.5, net=+bet*1.5
                         // push: payout=bet, net=0
                         // lose: payout=0, net=-bet (loss)
-                        const netResult = p.payout - p.bet;
+                        let netResult = p.payout - p.bet;
+                        const gp = room.game.players.find(g => g.id === p.playerId);
+                        if (gp && gp.penalizedAmount) {
+                            netResult += gp.penalizedAmount;
+                        }
+
                         if (netResult > 0) {
                             this.userDB.addBalance(player.userId, netResult);
                         } else if (netResult < 0) {
-                            this.userDB.deductBalance(player.userId, Math.abs(netResult));
+                            this.userDB.deductBalance(player.userId, Math.abs(netResult), true);
                         }
                         // push (netResult === 0): no change
 
@@ -598,18 +603,63 @@ class RoomManager {
             if (room) {
                 if (room.status === 'PLAYING' && room.game) {
                     room.game.setPlayerConnectionStatus(socket.id, false);
+
+                    // Instant forfeit penalty for disconnecting during active game
+                    const gameType = room.settings.gameType || 'dalmuti';
+                    if ((gameType === 'blackjack' || gameType === 'poker') && this.userDB) {
+                        const gp = room.game.players.find(p => p.id === socket.id);
+                        if (gp && socket.data.userId) {
+                            const spent = gp.totalBet || gp.bet || 0;
+                            if (spent > 0 && !gp.penalizedAmount) {
+                                this.userDB.deductBalance(socket.data.userId, spent, true);
+                                gp.penalizedAmount = spent;
+                            }
+                        }
+                    }
+
                     const remaining = room.game.players.filter(p => p.connected).length;
                     if (remaining === 0) {
                         console.log(`Room ${roomId} deleted (All players disconnected)`);
+                        this.forceSettleUnfinishedGame(room);
                         this.rooms.delete(roomId);
                         this.broadcastRoomList();
+                    } else {
+                        // Host Migration during game
+                        if (room.ownerId === socket.id) {
+                            const newOwner = room.players.find(p => p.id !== socket.id && room.game.players.find(gp => gp.id === p.id && gp.connected));
+                            if (newOwner) {
+                                room.ownerId = newOwner.id;
+                                this.io.to(roomId).emit('room_update', this.getRoomData(room));
+                            }
+                        }
                     }
                 } else {
                     room.players = room.players.filter(p => p.id !== socket.id);
                     if (room.players.length === 0) {
                         this.rooms.delete(roomId);
                     } else {
+                        // Host Migration in lobby
+                        if (room.ownerId === socket.id) {
+                            room.ownerId = room.players[0].id;
+                        }
                         this.io.to(roomId).emit('room_update', this.getRoomData(room));
+                    }
+                }
+            }
+        }
+    }
+
+    forceSettleUnfinishedGame(room) {
+        const gameType = room.settings.gameType || 'dalmuti';
+        if ((gameType === 'poker' || gameType === 'blackjack') && this.userDB) {
+            if (!room.game || !room.game.players) return;
+            for (const gp of room.game.players) {
+                const p = room.players.find(pl => pl.id === gp.id);
+                if (p && p.userId) {
+                    const spent = gp.totalBet || gp.bet || 0;
+                    if (spent > 0 && !gp.penalizedAmount) {
+                        this.userDB.deductBalance(p.userId, spent, true);
+                        gp.penalizedAmount = spent;
                     }
                 }
             }

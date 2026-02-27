@@ -108,7 +108,12 @@ class UserDB {
 
         const salt = bcrypt.genSaltSync(10);
         const hash = bcrypt.hashSync(password, salt);
-        const now = new Date().toISOString().split('T')[0];
+
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const todayLocal = `${year}-${month}-${day}`;
 
         this.users[id] = {
             id,
@@ -116,7 +121,7 @@ class UserDB {
             displayName: displayName.trim(),
             passwordHash: hash,
             balance: INITIAL_BALANCE,
-            lastDailyRefill: now,
+            lastDailyRefill: todayLocal,
             createdAt: Date.now(),
             stats: this._createEmptyStats(),
             gameHistory: []
@@ -150,10 +155,15 @@ class UserDB {
         const user = this.users[userId];
         if (!user) return;
 
-        const today = new Date().toISOString().split('T')[0];
-        if (user.lastDailyRefill !== today) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const todayLocal = `${year}-${month}-${day}`;
+
+        if (user.lastDailyRefill !== todayLocal) {
             user.balance += DAILY_AMOUNT;
-            user.lastDailyRefill = today;
+            user.lastDailyRefill = todayLocal;
             this.save();
         }
     }
@@ -231,11 +241,11 @@ class UserDB {
         return user.balance;
     }
 
-    deductBalance(userId, amount) {
+    deductBalance(userId, amount, force = false) {
         const user = this.users[userId];
         if (!user) return false;
         if (amount <= 0) return false;
-        if (user.balance < amount) return false;
+        if (!force && user.balance < amount) return false;
 
         user.balance -= amount;
         this.save();

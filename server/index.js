@@ -179,6 +179,15 @@ io.on('connection', (socket) => {
             return;
         }
 
+        // Prevent double spending by playing minigames while active in a casino room
+        if (socket.data.roomId) {
+            const room = roomManager.rooms.get(socket.data.roomId);
+            if (room && room.status === 'PLAYING') {
+                if (callback) callback({ success: false, error: '게임 방 참여 중에는 미니게임을 진행할 수 없습니다 (배팅 중복 방지).' });
+                return;
+            }
+        }
+
         const validBet = parseInt(betAmount);
         if (isNaN(validBet) || validBet <= 0) {
             if (callback) callback({ success: false, error: 'Invalid bet' });
