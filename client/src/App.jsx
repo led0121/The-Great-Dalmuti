@@ -74,6 +74,14 @@ function AppContent() {
       setUserInfo(prev => prev ? { ...prev, balance } : prev)
     })
 
+    socket.on('force_logout', (msg) => {
+      alert(msg)
+      setUserInfo(null)
+      setUsername('')
+      setCurrentRoom(null)
+      setGameState(null)
+    })
+
     return () => {
       socket.off('connect')
       socket.off('disconnect')
@@ -84,6 +92,7 @@ function AppContent() {
       socket.off('online_count')
       socket.off('balance_update')
       socket.off('login_success')
+      socket.off('force_logout')
     }
   }, [])
 

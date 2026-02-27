@@ -59,6 +59,24 @@ function scheduleDailyRefill() {
 }
 scheduleDailyRefill();
 
+// ===== Helper Function =====
+function handleDuplicateLogin(userId, currentSocketId) {
+    let duplicateFound = false;
+    for (const [socketId, userData] of onlineUsers.entries()) {
+        if (userData.userId === userId && socketId !== currentSocketId) {
+            const existingSocket = io.sockets.sockets.get(socketId);
+            if (existingSocket) {
+                // Send warning to the existing socket
+                existingSocket.emit('force_logout', '다른 장소에서 로그인 되었습니다. 기존 연결이 끊어집니다.');
+                existingSocket.disconnect(true);
+            }
+            onlineUsers.delete(socketId);
+            duplicateFound = true;
+        }
+    }
+    return duplicateFound;
+}
+
 // ===== Socket Connection =====
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
@@ -70,6 +88,12 @@ io.on('connection', (socket) => {
             socket.data.userId = result.user.id;
             socket.data.username = result.user.displayName;
             socket.data.displayName = result.user.displayName;
+            // Check for previous sessions and disconnect them
+            const hasDuplicate = handleDuplicateLogin(result.user.id, socket.id);
+            if (hasDuplicate) {
+                socket.emit('error', '기존 로그인된 기기에서 연결을 끊고 새로 접속했습니다.');
+            }
+
             onlineUsers.set(socket.id, { userId: result.user.id, username: result.user.displayName });
             broadcastOnlineCount();
         }
@@ -82,6 +106,12 @@ io.on('connection', (socket) => {
             socket.data.userId = result.user.id;
             socket.data.username = result.user.displayName;
             socket.data.displayName = result.user.displayName;
+            // Check for previous sessions and disconnect them
+            const hasDuplicate = handleDuplicateLogin(result.user.id, socket.id);
+            if (hasDuplicate) {
+                socket.emit('error', '기존 로그인된 기기에서 연결을 끊고 새로 접속했습니다.');
+            }
+
             onlineUsers.set(socket.id, { userId: result.user.id, username: result.user.displayName });
             broadcastOnlineCount();
         }
