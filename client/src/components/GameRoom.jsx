@@ -443,7 +443,7 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                             >
                                 <div className="relative mb-1">
                                     <span className={`text-4xl font-bold ${gameState.currentTurn === p.id ? 'text-yellow-400 animate-pulse' : 'text-gray-400'}`}>
-                                        {p.username[0].toUpperCase()}
+                                        {p.username ? p.username[0].toUpperCase() : '?'}
                                     </span>
                                     {p.rank > 0 && (
                                         <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-black/90 text-[10px] px-1.5 rounded text-yellow-500 whitespace-nowrap border border-yellow-500/30">
@@ -519,17 +519,39 @@ export default function GameRoom({ socket, room, gameState, username, onStartGam
                     )}
                 </div>
 
-                {/* Phase Overlay (Taxation/Market) */}
-                {(gameState.phase === 'TAXATION' || gameState.phase === 'MARKET') && (
+                {/* Phase Overlay (Taxation/Market/Revolution) */}
+                {(gameState.phase === 'TAXATION' || gameState.phase === 'MARKET' || gameState.phase === 'REVOLUTION_CHOICE') && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center z-50 bg-black/60 backdrop-blur-sm rounded-xl p-4 text-center pointer-events-auto">
-                        <h2 className={`text-3xl font-black mb-2 ${gameState.phase === 'TAXATION' ? 'text-green-500' : 'text-blue-500'}`}>
-                            {gameState.phase === 'TAXATION' ? t('taxationPhase') : t('marketPhase', { time: gameState.timeLeft })}
+                        <h2 className={`text-3xl font-black mb-2 ${gameState.phase === 'TAXATION' ? 'text-green-500' : gameState.phase === 'REVOLUTION_CHOICE' ? 'text-red-500 animate-pulse' : 'text-blue-500'}`}>
+                            {gameState.phase === 'TAXATION' ? t('taxationPhase') : gameState.phase === 'REVOLUTION_CHOICE' ? t('revolutionTitle', 'REVOLUTION?!') : t('marketPhase', { time: gameState.timeLeft })}
                         </h2>
                         {/* Logic Content would go here, currently empty in this block? Restore from previous if needed or relying on existing logic? */}
                         {/* Wait, I need to make sure the BUTTONS for Tax/Market are here too? */}
                         {/* In the big rewrite (Step 1141), there was logic here. */}
                         {/* The view_file output in Step 1167 shows the logic was MISSING in lines 390-406! */}
                         {/* I must restore the Logic UI here. */}
+
+                        {/* Revolution Logic UI */}
+                        {gameState.phase === 'REVOLUTION_CHOICE' && (
+                            <div className="mt-4">
+                                {gameState.players.find(p => p.id === socket.id)?.hand.filter(c => c.isJoker).length === 2 ? (
+                                    <>
+                                        <p className="mb-4 text-red-300 text-xl font-bold">{t('revolutionPrompt')}</p>
+                                        <p className="mb-6 text-gray-300 text-sm">{t('revolutionDesc')}</p>
+                                        <div className="flex gap-4 justify-center">
+                                            <button onClick={() => socket.emit('revolution_choice', true)} className="bg-red-600 px-6 py-3 rounded font-bold hover:bg-red-500 transition-colors shadow-lg shadow-red-500/50">
+                                                {t('revolutionYes')}
+                                            </button>
+                                            <button onClick={() => socket.emit('revolution_choice', false)} className="bg-gray-600 px-6 py-3 rounded font-bold hover:bg-gray-500 transition-colors shadow-lg">
+                                                {t('revolutionNo')}
+                                            </button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <p className="text-gray-400 text-xl animate-pulse font-bold">{t('revolutionWaiting')}</p>
+                                )}
+                            </div>
+                        )}
 
                         {/* Taxation Logic UI */}
                         {gameState.phase === 'TAXATION' && (

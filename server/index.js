@@ -134,6 +134,7 @@ io.on('connection', (socket) => {
         if (result.success) {
             socket.data.displayName = result.user.displayName;
             socket.data.username = result.user.displayName;
+            socket.emit('account_updated', result.user);
         }
         if (callback) callback(result);
     });

@@ -28,7 +28,10 @@ class RoomManager {
     }
 
     createRoom(socket, data) {
-        if (!socket.data.username) return;
+        if (!socket.data.username) {
+            socket.emit('force_logout', '세션이 만료되었습니다. 다시 로그인해주세요.');
+            return;
+        }
 
         // Support both old string format and new object format
         let roomName, betAmount;
@@ -77,6 +80,11 @@ class RoomManager {
     }
 
     joinRoom(socket, roomId) {
+        if (!socket.data.username) {
+            socket.emit('force_logout', '세션이 만료되었습니다. 다시 로그인해주세요.');
+            return;
+        }
+
         const room = this.rooms.get(roomId);
         if (!room) {
             socket.emit('error', 'Room not found');
@@ -718,11 +726,11 @@ class RoomManager {
         }
     }
 
-    handleSeatSelection(socket) {
+    handleSeatSelection(socket, cardId) {
         const roomId = socket.data.roomId;
         const room = this.rooms.get(roomId);
         if (room && room.game && room.game.handleSeatCardSelection) {
-            room.game.handleSeatCardSelection(socket.id);
+            room.game.handleSeatCardSelection(socket.id, cardId);
         }
     }
 

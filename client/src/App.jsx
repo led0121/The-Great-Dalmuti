@@ -82,6 +82,11 @@ function AppContent() {
       setGameState(null)
     })
 
+    socket.on('account_updated', (user) => {
+      setUsername(user.displayName || user.username)
+      setUserInfo(prev => ({ ...prev, ...user }))
+    })
+
     return () => {
       socket.off('connect')
       socket.off('disconnect')
@@ -93,6 +98,7 @@ function AppContent() {
       socket.off('balance_update')
       socket.off('login_success')
       socket.off('force_logout')
+      socket.off('account_updated')
     }
   }, [])
 
