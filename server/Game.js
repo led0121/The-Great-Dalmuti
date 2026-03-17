@@ -621,12 +621,19 @@ class Game {
                     this.broadcastState();
                 }
             }
+            else if (!isConnected && this.phase === 'REVOLUTION_CHOICE') {
+                if (playerId === this.revolutionCandidateId) {
+                    console.log(`Revolution Candidate ${player.username} disconnected. Aborting revolution choice.`);
+                    this.handleRevolutionChoice(playerId, false);
+                } else {
+                    this.broadcastState();
+                }
+            }
             else if (!isConnected && this.phase === 'TAXATION') {
-                // If a player involved in tax disconnects, we should abort tax to avoid stuck state?
-                // Or just proceed? The problem is if they OWE cards and leave.
-                // Check if involved in active tax
+                // If a player involved in tax disconnects, we should abort tax to avoid stuck state
                 const matches = this.taxationMatches || [];
-                const involved = matches.find(m => m.debtorId === playerId);
+                // Check if they are either debtor or creditor to avoid getting stuck
+                const involved = matches.find(m => m.debtorId === playerId || m.creditorId === playerId);
 
                 if (involved) {
                     console.log(`Taxation participant ${player.username} disconnected. Aborting Taxation.`);
